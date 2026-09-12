@@ -1,0 +1,9 @@
+node_modules/
+dist/
+dev-dist/
+backend/data/
+*.local
+.env
+.env.*
+certs/
+*.pem

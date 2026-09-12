@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<nfeProc xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00">
+  <NFe>
+    <infNFe Id="NFe43260912345678000199650010000012341123456780" versao="4.00">
+      <ide>
+        <cUF>43</cUF>
+        <natOp>VENDA AO CONSUMIDOR</natOp>
+        <mod>65</mod>
+        <serie>1</serie>
+        <nNF>1234</nNF>
+        <dhEmi>2026-09-11T14:30:00-03:00</dhEmi>
+        <tpNF>1</tpNF>
+      </ide>
+      <emit>
+        <CNPJ>12345678000199</CNPJ>
+        <xNome>MERCADO TESTE LTDA</xNome>
+      </emit>
+      <det nItem="1">
+        <prod>
+          <cProd>001</cProd>
+          <cEAN>7891000100103</cEAN>
+          <xProd>LEITE INTEGRAL 1L</xProd>
+          <NCM>04012010</NCM>
+          <CFOP>5102</CFOP>
+          <uCom>UN</uCom>
+          <qCom>6.0000</qCom>
+          <vUnCom>4.9900</vUnCom>
+          <vProd>29.94</vProd>
+        </prod>
+      </det>
+      <det nItem="2">
+        <prod>
+          <cProd>002</cProd>
+          <cEAN>7894900011517</cEAN>
+          <xProd>REFRIGERANTE COLA 2L</xProd>
+          <NCM>22021000</NCM>
+          <CFOP>5102</CFOP>
+          <uCom>UN</uCom>
+          <qCom>2.0000</qCom>
+          <vUnCom>8.5000</vUnCom>
+          <vProd>17.00</vProd>
+        </prod>
+      </det>
+      <det nItem="3">
+        <prod>
+          <cProd>003</cProd>
+          <cEAN>SEM GTIN</cEAN>
+          <xProd>PAO FRANCES KG</xProd>
+          <NCM>19059090</NCM>
+          <CFOP>5102</CFOP>
+          <uCom>KG</uCom>
+          <qCom>1.5000</qCom>
+          <vUnCom>15.9000</vUnCom>
+          <vProd>23.85</vProd>
+        </prod>
+      </det>
+      <total>
+        <ICMSTot>
+          <vNF>70.79</vNF>
+        </ICMSTot>
+      </total>
+    </infNFe>
+  </NFe>
+</nfeProc>

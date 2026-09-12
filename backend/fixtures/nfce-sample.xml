@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<nfeProc xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00">
+  <NFe>
+    <infNFe versao="4.00" Id="NFe35240612345678901234567890123456789012345678">
+      <ide>
+        <cUF>35</cUF>
+        <mod>65</mod>
+        <dhEmi>2024-06-01T10:15:00-03:00</dhEmi>
+      </ide>
+      <det nItem="1">
+        <prod>
+          <cProd>001</cProd>
+          <cEAN>7891234567895</cEAN>
+          <xProd>ARROZ TIPO 1 5KG</xProd>
+          <uCom>UN</uCom>
+          <qCom>2.0000</qCom>
+          <vUnCom>25.9000000000</vUnCom>
+        </prod>
+      </det>
+      <det nItem="2">
+        <prod>
+          <cProd>002</cProd>
+          <cEAN>SEM GTIN</cEAN>
+          <xProd>FEIJAO PRETO 1KG</xProd>
+          <uCom>UN</uCom>
+          <qCom>3.0000</qCom>
+          <vUnCom>8.5000000000</vUnCom>
+        </prod>
+      </det>
+    </infNFe>
+  </NFe>
+</nfeProc>
