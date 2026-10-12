@@ -45,6 +45,12 @@ async function createTable() {
     )
   `);
 
+  try {
+    await conn.query(`ALTER TABLE products ADD COLUMN fornecedor VARCHAR(150) NULL`);
+  } catch (err) {
+    if (err.code !== 'ER_DUP_FIELDNAME') throw err;
+  }
+
   await conn.query(`
     CREATE TABLE IF NOT EXISTS movements (
       id           INT PRIMARY KEY AUTO_INCREMENT,

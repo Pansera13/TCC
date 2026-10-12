@@ -76,4 +76,19 @@ async function toggleUserStatus(req, res) {
   return res.json({ message: newStatus ? 'Conta ativada.' : 'Conta desativada.', ativo: newStatus });
 }
 
-module.exports = { listUsers, createUser, updateUserRole, toggleUserStatus };
+async function deleteUser(req, res) {
+  const id = parseInt(req.params.id);
+
+  if (id === req.user.id) {
+    return res.status(400).json({ message: 'Você não pode remover sua própria conta.' });
+  }
+
+  const [result] = await pool.execute('DELETE FROM usuarios WHERE id = ?', [id]);
+  if (result.affectedRows === 0) {
+    return res.status(404).json({ message: 'Usuário não encontrado.' });
+  }
+
+  return res.json({ message: 'Usuário removido com sucesso.' });
+}
+
+module.exports = { listUsers, createUser, updateUserRole, toggleUserStatus, deleteUser };

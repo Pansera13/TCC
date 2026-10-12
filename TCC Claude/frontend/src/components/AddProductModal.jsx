@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
 import api from '../services/api';
 
-const INITIAL_FORM = { nome: '', quantidade: '', unidade: 'UN', categoria: '' };
+const INITIAL_FORM = { nome: '', quantidade: '', unidade: 'UN', categoria: '', fornecedor: '' };
 const UNIDADES = ['UN', 'CX', 'PCT', 'KG', 'G', 'T', 'L', 'ML', 'M', 'CM'];
 
 function Field({ label, required, children, error }) {
@@ -144,6 +144,7 @@ export default function AddProductModal({ onClose, onProductsAdded }) {
         quantidade: parseFloat(form.quantidade),
         unidade: form.unidade,
         categoria: form.categoria.trim() || null,
+        fornecedor: form.fornecedor.trim() || null,
       });
       onProductsAdded();
       onClose();
@@ -231,6 +232,7 @@ export default function AddProductModal({ onClose, onProductsAdded }) {
               step="any"
               className={inputCls(errors.quantidade)}
               value={form.quantidade}
+              onWheel={e => e.currentTarget.blur()}
               onChange={e => { setForm(f => ({ ...f, quantidade: e.target.value })); setErrors(er => ({ ...er, quantidade: '' })); }}
               placeholder="0"
             />
@@ -250,6 +252,14 @@ export default function AddProductModal({ onClose, onProductsAdded }) {
             className={inputCls(errors.categoria)}
             value={form.categoria}
             onChange={e => setForm(f => ({ ...f, categoria: e.target.value }))}
+            placeholder="Opcional"
+          />
+        </Field>
+        <Field label="Fornecedor">
+          <input
+            className={inputCls(false)}
+            value={form.fornecedor}
+            onChange={e => setForm(f => ({ ...f, fornecedor: e.target.value }))}
             placeholder="Opcional"
           />
         </Field>

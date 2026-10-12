@@ -2,7 +2,7 @@ const pool = require('../db');
 const { logMovement } = require('../services/movementService');
 
 async function createProduct(req, res) {
-  const { nome, quantidade, unidade, peso_kg, categoria } = req.body;
+  const { nome, quantidade, unidade, peso_kg, categoria, fornecedor } = req.body;
 
   if (!nome || !String(nome).trim()) {
     return res.status(400).json({ message: 'Nome é obrigatório.' });
@@ -16,14 +16,15 @@ async function createProduct(req, res) {
   }
 
   const [result] = await pool.execute(
-    `INSERT INTO products (nome, quantidade, unidade, peso_kg, categoria)
-     VALUES (?, ?, ?, ?, ?)`,
+    `INSERT INTO products (nome, quantidade, unidade, peso_kg, categoria, fornecedor)
+     VALUES (?, ?, ?, ?, ?, ?)`,
     [
       String(nome).trim(),
       qty,
       String(unidade).trim(),
       (peso_kg != null && peso_kg !== '' && !isNaN(parseFloat(peso_kg))) ? parseFloat(peso_kg) : null,
       categoria ? String(categoria).trim() : null,
+      fornecedor ? String(fornecedor).trim() : null,
     ]
   );
 
@@ -41,7 +42,7 @@ async function createProduct(req, res) {
 
 async function updateProduct(req, res) {
   const id = parseInt(req.params.id);
-  const { nome, quantidade, unidade, categoria } = req.body;
+  const { nome, quantidade, unidade, categoria, fornecedor } = req.body;
 
   if (!nome || !String(nome).trim()) {
     return res.status(400).json({ message: 'Nome é obrigatório.' });
@@ -55,12 +56,13 @@ async function updateProduct(req, res) {
   }
 
   const [result] = await pool.execute(
-    'UPDATE products SET nome = ?, quantidade = ?, unidade = ?, categoria = ? WHERE id = ?',
+    'UPDATE products SET nome = ?, quantidade = ?, unidade = ?, categoria = ?, fornecedor = ? WHERE id = ?',
     [
       String(nome).trim(),
       qty,
       String(unidade).trim(),
       categoria ? String(categoria).trim() : null,
+      fornecedor ? String(fornecedor).trim() : null,
       id,
     ]
   );
@@ -107,7 +109,7 @@ async function withdrawProduct(req, res) {
 
 async function listProducts(req, res) {
   const [rows] = await pool.execute(
-    'SELECT id, nome, quantidade, unidade, peso_kg, categoria, created_at FROM products ORDER BY created_at DESC'
+    'SELECT id, nome, quantidade, unidade, peso_kg, categoria, fornecedor, created_at FROM products ORDER BY created_at DESC'
   );
   return res.json(rows);
 }

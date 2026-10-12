@@ -36,5 +36,6 @@ export const listUsers = () => api.get('/api/users');
 export const createUser = (data) => api.post('/api/users', data);
 export const updateUserRole = (id, role) => api.put(`/api/users/${id}/role`, { role });
 export const toggleUserStatus = (id) => api.put(`/api/users/${id}/status`);
+export const deleteUser = (id) => api.delete(`/api/users/${id}`);
 
 export default api;

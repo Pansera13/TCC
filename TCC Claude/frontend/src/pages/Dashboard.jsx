@@ -5,7 +5,7 @@ import EditProductModal from '../components/EditProductModal';
 import WithdrawModal from '../components/WithdrawModal';
 import AddUserModal from '../components/AddUserModal';
 import ThemeToggle from '../components/ThemeToggle';
-import api, { listMovements, listUsers, updateUserRole, toggleUserStatus } from '../services/api';
+import api, { listMovements, listUsers, updateUserRole, toggleUserStatus, deleteUser } from '../services/api';
 
 const ALL_NAV_ITEMS = [
   { id: 'dashboard',     label: 'Início',          icon: '🏠' },
@@ -118,7 +118,7 @@ export default function Dashboard({ darkMode, setDarkMode }) {
   // Abre o sidebar quando o cursor está nos primeiros 113px da borda esquerda (≈ 3 cm a 96 dpi)
   useEffect(() => {
     function handleMouseMove(e) {
-      if (e.clientX <= 113) setSidebarVisible(true);
+      if (e.clientX <= 113 && e.clientY < window.innerHeight - 90) setSidebarVisible(true);
     }
     window.addEventListener('mousemove', handleMouseMove);
     return () => window.removeEventListener('mousemove', handleMouseMove);
@@ -155,6 +155,16 @@ export default function Dashboard({ darkMode, setDarkMode }) {
     }
   }
 
+  async function handleDeleteUser(u) {
+    if (!window.confirm(`Remover "${u.nome}" permanentemente? Esta ação não pode ser desfeita.`)) return;
+    try {
+      await deleteUser(u.id);
+      setUsers(prev => prev.filter(x => x.id !== u.id));
+    } catch (err) {
+      alert(err.response?.data?.message || 'Erro ao remover usuário.');
+    }
+  }
+
   async function handleSaveName() {
     const trimmed = newName.trim();
     if (!trimmed) return;
@@ -185,11 +195,25 @@ export default function Dashboard({ darkMode, setDarkMode }) {
       <>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
           {METRICS.map(metric => (
-            <div key={metric.label} className={`bg-gradient-to-br ${metric.color} rounded-2xl p-5 text-white shadow-md`}>
-              <div className="text-2xl mb-2">{metric.icon}</div>
-              <div className="text-3xl font-bold">{metric.value}</div>
-              <div className="text-xs opacity-80 mt-1">{metric.label}</div>
-            </div>
+            metric.label === 'Sem Estoque'
+              ? (
+                <button
+                  key={metric.label}
+                  onClick={() => setActiveNav('sem-estoque')}
+                  className={`bg-gradient-to-br ${metric.color} rounded-2xl p-5 text-white shadow-md text-left cursor-pointer hover:opacity-90 transition-opacity`}
+                >
+                  <div className="text-2xl mb-2">{metric.icon}</div>
+                  <div className="text-3xl font-bold">{metric.value}</div>
+                  <div className="text-xs opacity-80 mt-1">{metric.label}</div>
+                </button>
+              )
+              : (
+                <div key={metric.label} className={`bg-gradient-to-br ${metric.color} rounded-2xl p-5 text-white shadow-md`}>
+                  <div className="text-2xl mb-2">{metric.icon}</div>
+                  <div className="text-3xl font-bold">{metric.value}</div>
+                  <div className="text-xs opacity-80 mt-1">{metric.label}</div>
+                </div>
+              )
           ))}
         </div>
 
@@ -203,6 +227,53 @@ export default function Dashboard({ darkMode, setDarkMode }) {
           {renderTabelaProdutos(false)}
         </div>
       </>
+    );
+  }
+
+  function renderSemEstoque() {
+    const esgotados = products
+      .filter(p => parseFloat(p.quantidade) === 0)
+      .sort((a, b) => (a.categoria || 'Sem Categoria').localeCompare(b.categoria || 'Sem Categoria'));
+
+    return (
+      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
+        <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span>❌</span>
+            <h2 className="font-semibold text-gray-800 dark:text-white text-sm">Produtos Esgotados</h2>
+            <span className="ml-1 text-xs text-gray-400 dark:text-gray-500">({esgotados.length})</span>
+          </div>
+          <button onClick={() => setActiveNav('dashboard')} className="text-xs text-purple-600 dark:text-purple-400 hover:underline">
+            ← Voltar ao Início
+          </button>
+        </div>
+
+        {esgotados.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 text-gray-400 dark:text-gray-600">
+            <span className="text-4xl mb-3">✅</span>
+            <p className="text-sm">Nenhum produto esgotado no momento.</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs text-gray-400 dark:text-gray-500 border-b border-gray-100 dark:border-gray-800">
+                  <th className="px-4 py-3 font-medium">Nome</th>
+                  <th className="px-4 py-3 font-medium whitespace-nowrap">Categoria</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
+                {esgotados.map(p => (
+                  <tr key={p.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                    <td className="px-4 py-3 font-medium text-gray-800 dark:text-gray-200">{p.nome}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-gray-500 dark:text-gray-500">{p.categoria || 'Sem Categoria'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     );
   }
 
@@ -251,9 +322,10 @@ export default function Dashboard({ darkMode, setDarkMode }) {
           <thead>
             <tr className="text-left text-xs text-gray-400 dark:text-gray-500 border-b border-gray-100 dark:border-gray-800">
               <th className="px-4 py-3 font-medium">Nome</th>
-              <th className="px-4 py-3 font-medium">Quantidade</th>
-              <th className="px-4 py-3 font-medium">Unidade</th>
-              <th className="px-4 py-3 font-medium">Categoria</th>
+              <th className="px-4 py-3 font-medium whitespace-nowrap">Qtd.</th>
+              <th className="px-4 py-3 font-medium whitespace-nowrap">Un.</th>
+              <th className="px-4 py-3 font-medium whitespace-nowrap">Categoria</th>
+              <th className="px-4 py-3 font-medium whitespace-nowrap">Fornecedor</th>
               {comAcoes && <th className="px-4 py-3 font-medium"></th>}
             </tr>
           </thead>
@@ -261,19 +333,20 @@ export default function Dashboard({ darkMode, setDarkMode }) {
             {products.map(p => (
               <tr key={p.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
                 <td className="px-4 py-3 font-medium text-gray-800 dark:text-gray-200">{p.nome}</td>
-                <td className="px-4 py-3">
+                <td className="px-4 py-3 whitespace-nowrap">
                   <span className={
-                    p.quantidade === 0
+                    parseFloat(p.quantidade) === 0
                       ? 'text-red-500 font-semibold'
-                      : p.quantidade <= LOW_STOCK_THRESHOLD
+                      : parseFloat(p.quantidade) <= LOW_STOCK_THRESHOLD
                         ? 'text-yellow-500 font-semibold'
                         : 'text-gray-600 dark:text-gray-400'
                   }>
-                    {p.quantidade}
+                    {parseFloat(p.quantidade)}
                   </span>
                 </td>
-                <td className="px-4 py-3 text-gray-600 dark:text-gray-400">{p.unidade}</td>
-                <td className="px-4 py-3 text-gray-500 dark:text-gray-500">{p.categoria || '—'}</td>
+                <td className="px-4 py-3 whitespace-nowrap text-gray-600 dark:text-gray-400">{p.unidade}</td>
+                <td className="px-4 py-3 whitespace-nowrap text-gray-500 dark:text-gray-500">{p.categoria || '—'}</td>
+                <td className="px-4 py-3 whitespace-nowrap text-gray-500 dark:text-gray-500">{p.fornecedor || '—'}</td>
                 {comAcoes && (
                   <td className="px-4 py-3">
                     <div className="flex gap-2">
@@ -356,26 +429,28 @@ export default function Dashboard({ darkMode, setDarkMode }) {
                   <thead>
                     <tr className="text-left text-xs text-gray-400 dark:text-gray-500 border-b border-gray-100 dark:border-gray-800">
                       <th className="px-4 py-2.5 font-medium">Nome</th>
-                      <th className="px-4 py-2.5 font-medium">Quantidade</th>
-                      <th className="px-4 py-2.5 font-medium">Unidade</th>
+                      <th className="px-4 py-2.5 font-medium whitespace-nowrap">Quantidade</th>
+                      <th className="px-4 py-2.5 font-medium whitespace-nowrap">Unidade</th>
+                      <th className="px-4 py-2.5 font-medium whitespace-nowrap">Fornecedor</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
                     {grouped[cat].map(p => (
                       <tr key={p.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
                         <td className="px-4 py-2.5 font-medium text-gray-800 dark:text-gray-200">{p.nome}</td>
-                        <td className="px-4 py-2.5">
+                        <td className="px-4 py-2.5 whitespace-nowrap">
                           <span className={
-                            p.quantidade === 0
+                            parseFloat(p.quantidade) === 0
                               ? 'text-red-500 font-semibold'
-                              : p.quantidade <= LOW_STOCK_THRESHOLD
+                              : parseFloat(p.quantidade) <= LOW_STOCK_THRESHOLD
                                 ? 'text-yellow-500 font-semibold'
                                 : 'text-gray-600 dark:text-gray-400'
                           }>
-                            {p.quantidade}
+                            {parseFloat(p.quantidade)}
                           </span>
                         </td>
-                        <td className="px-4 py-2.5 text-gray-600 dark:text-gray-400">{p.unidade}</td>
+                        <td className="px-4 py-2.5 whitespace-nowrap text-gray-600 dark:text-gray-400">{p.unidade}</td>
+                        <td className="px-4 py-2.5 whitespace-nowrap text-gray-500 dark:text-gray-500">{p.fornecedor || '—'}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -515,6 +590,12 @@ export default function Dashboard({ darkMode, setDarkMode }) {
                             >
                               {u.ativo ? 'Desativar' : 'Ativar'}
                             </button>
+                            <button
+                              onClick={() => handleDeleteUser(u)}
+                              className="px-4 py-2 text-sm rounded-lg border border-red-200 dark:border-red-800 text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition whitespace-nowrap"
+                            >
+                              Remover
+                            </button>
                           </div>
                         ) : (
                           <span className="text-xs text-gray-400">—</span>
@@ -568,26 +649,6 @@ export default function Dashboard({ darkMode, setDarkMode }) {
             </button>
           ))}
         </nav>
-
-        {/* Bottom links */}
-        <div className="px-3 py-3 border-t border-gray-100 dark:border-gray-800 flex flex-col gap-1">
-          <a
-            href="https://linkedin.com/in/lucas-pansera-a80b92320"
-            target="_blank"
-            rel="noreferrer"
-            className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition"
-          >
-            <span className="text-base">💼</span><span>LinkedIn</span>
-          </a>
-          <a
-            href="https://github.com/Pansera13/TCC"
-            target="_blank"
-            rel="noreferrer"
-            className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition"
-          >
-            <span className="text-base">🐙</span><span>GitHub</span>
-          </a>
-        </div>
 
         {/* Profile area */}
         <div className="px-3 pb-4" ref={profileRef}>
@@ -699,6 +760,7 @@ export default function Dashboard({ darkMode, setDarkMode }) {
                 {renderMovimentacoes()}
               </div>
             )}
+            {activeNav === 'sem-estoque' && renderSemEstoque()}
             {activeNav === 'equipe' && isAdmin && renderEquipe()}
           </div>
         </main>

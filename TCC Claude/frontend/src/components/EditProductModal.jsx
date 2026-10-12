@@ -22,9 +22,10 @@ const inputCls = (err) =>
 export default function EditProductModal({ product, onClose, onSaved }) {
   const [form, setForm] = useState({
     nome: product.nome,
-    quantidade: String(product.quantidade),
+    quantidade: String(parseFloat(product.quantidade)),
     unidade: product.unidade,
     categoria: product.categoria || '',
+    fornecedor: product.fornecedor || '',
   });
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
@@ -56,6 +57,7 @@ export default function EditProductModal({ product, onClose, onSaved }) {
         quantidade: parseFloat(form.quantidade),
         unidade: form.unidade,
         categoria: form.categoria.trim() || null,
+        fornecedor: form.fornecedor.trim() || null,
       });
       onSaved();
       onClose();
@@ -105,6 +107,7 @@ export default function EditProductModal({ product, onClose, onSaved }) {
                 step="any"
                 className={inputCls(errors.quantidade)}
                 value={form.quantidade}
+                onWheel={e => e.currentTarget.blur()}
                 onChange={e => { setForm(f => ({ ...f, quantidade: e.target.value })); setErrors(er => ({ ...er, quantidade: '' })); }}
               />
             </Field>
@@ -124,6 +127,15 @@ export default function EditProductModal({ product, onClose, onSaved }) {
               className={inputCls(errors.categoria)}
               value={form.categoria}
               onChange={e => setForm(f => ({ ...f, categoria: e.target.value }))}
+              placeholder="Opcional"
+            />
+          </Field>
+
+          <Field label="Fornecedor">
+            <input
+              className={inputCls(false)}
+              value={form.fornecedor}
+              onChange={e => setForm(f => ({ ...f, fornecedor: e.target.value }))}
               placeholder="Opcional"
             />
           </Field>
