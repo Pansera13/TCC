@@ -8,10 +8,10 @@ export function AuthProvider({ children }) {
     return stored ? JSON.parse(stored) : null;
   });
 
-  function loginUser(token, nome) {
+  function loginUser(token, nome, role, id) {
     localStorage.setItem('token', token);
-    localStorage.setItem('user', JSON.stringify({ nome }));
-    setUser({ nome });
+    localStorage.setItem('user', JSON.stringify({ nome, role: role || 'admin', id }));
+    setUser({ nome, role: role || 'admin', id });
   }
 
   function logoutUser() {
@@ -20,8 +20,14 @@ export function AuthProvider({ children }) {
     setUser(null);
   }
 
+  function updateUser(fields) {
+    const updated = { ...user, ...fields };
+    localStorage.setItem('user', JSON.stringify(updated));
+    setUser(updated);
+  }
+
   return (
-    <AuthContext.Provider value={{ user, loginUser, logoutUser }}>
+    <AuthContext.Provider value={{ user, loginUser, logoutUser, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

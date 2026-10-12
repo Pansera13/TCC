@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
+const pool = require('../db');
 
-function authMiddleware(req, res, next) {
+async function authMiddleware(req, res, next) {
   const header = req.headers.authorization;
   if (!header || !header.startsWith('Bearer ')) {
     return res.status(401).json({ message: 'Não autorizado' });
@@ -8,6 +9,14 @@ function authMiddleware(req, res, next) {
   const token = header.split(' ')[1];
   try {
     const payload = jwt.verify(token, process.env.JWT_SECRET);
+    if (!payload.role) {
+      // Tokens antigos sem role — busca no banco
+      const [rows] = await pool.execute('SELECT role, ativo FROM usuarios WHERE id = ?', [payload.id]);
+      if (!rows[0] || !rows[0].ativo) {
+        return res.status(401).json({ message: 'Conta inativa ou não encontrada.' });
+      }
+      payload.role = rows[0].role;
+    }
     req.user = payload;
     next();
   } catch {

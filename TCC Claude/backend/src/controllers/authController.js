@@ -88,13 +88,17 @@ async function login(req, res) {
       return res.status(401).json({ message: 'Usuário ou senha inválidos.' });
     }
 
+    if (!user.ativo) {
+      return res.status(403).json({ message: 'Conta desativada. Entre em contato com o administrador.' });
+    }
+
     const token = jwt.sign(
-      { id: user.id, nome: user.nome, email: user.email },
+      { id: user.id, nome: user.nome, email: user.email, role: user.role || 'admin' },
       process.env.JWT_SECRET,
       { expiresIn: '8h' }
     );
 
-    return res.status(200).json({ token, nome: user.nome });
+    return res.status(200).json({ token, nome: user.nome, role: user.role || 'admin', id: user.id });
   } catch (err) {
     console.error('login error:', err);
     return res.status(500).json({ message: 'Erro interno do servidor.' });

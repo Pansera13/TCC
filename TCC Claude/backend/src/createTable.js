@@ -26,7 +26,41 @@ async function createTable() {
     )
   `);
 
-  console.log('Tabela `usuarios` criada com sucesso no banco `' + process.env.DB_NAME + '`.');
+  // Adiciona coluna role se ainda não existir
+  try {
+    await conn.query(`ALTER TABLE usuarios ADD COLUMN role ENUM('admin','user') NOT NULL DEFAULT 'admin'`);
+  } catch (err) {
+    if (err.code !== 'ER_DUP_FIELDNAME') throw err;
+  }
+
+  await conn.query(`
+    CREATE TABLE IF NOT EXISTS products (
+      id         INT PRIMARY KEY AUTO_INCREMENT,
+      nome       VARCHAR(255) NOT NULL,
+      quantidade DECIMAL(10,3) NOT NULL DEFAULT 0,
+      unidade    VARCHAR(10) NOT NULL DEFAULT 'UN',
+      peso_kg    DECIMAL(10,3) NULL,
+      categoria  VARCHAR(100) NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  await conn.query(`
+    CREATE TABLE IF NOT EXISTS movements (
+      id           INT PRIMARY KEY AUTO_INCREMENT,
+      product_id   INT NOT NULL,
+      product_nome VARCHAR(255) NOT NULL,
+      tipo         ENUM('entrada','saida') NOT NULL,
+      quantidade   DECIMAL(10,3) NOT NULL,
+      user_id      INT NOT NULL,
+      user_nome    VARCHAR(150) NOT NULL,
+      created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_product (product_id),
+      INDEX idx_created (created_at)
+    )
+  `);
+
+  console.log('Tabelas criadas com sucesso no banco `' + process.env.DB_NAME + '`.');
   await conn.end();
 }
 

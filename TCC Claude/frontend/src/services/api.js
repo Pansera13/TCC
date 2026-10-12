@@ -25,4 +25,16 @@ export const verifyCode = (email, code) =>
 export const resetPassword = (resetToken, novaSenha) =>
   api.post('/api/auth/reset-password', { resetToken, novaSenha });
 
+export const listProducts = () => api.get('/api/products');
+export const createProduct = (data) => api.post('/api/products', data);
+export const withdrawProduct = (id, quantidade) => api.post(`/api/products/${id}/withdraw`, { quantidade });
+export const queryNfe = (chave) => api.get(`/api/nfe/${encodeURIComponent(chave)}`);
+
+export const listMovements = () => api.get('/api/movements');
+
+export const listUsers = () => api.get('/api/users');
+export const createUser = (data) => api.post('/api/users', data);
+export const updateUserRole = (id, role) => api.put(`/api/users/${id}/role`, { role });
+export const toggleUserStatus = (id) => api.put(`/api/users/${id}/status`);
+
 export default api;
