@@ -8,9 +8,8 @@ export function AuthProvider({ children }) {
     return stored ? JSON.parse(stored) : null;
   });
 
-  function loginUser(token, nome, role, id) {
-    const avatarUrl = localStorage.getItem('avatar_' + id) || undefined;
-    const userData = { nome, role: role || 'admin', id, ...(avatarUrl ? { avatarUrl } : {}) };
+  function loginUser(token, nome, role, id, avatar_url) {
+    const userData = { nome, role: role || 'admin', id, avatarUrl: avatar_url || null };
     localStorage.setItem('token', token);
     localStorage.setItem('user', JSON.stringify(userData));
     setUser(userData);
@@ -24,9 +23,6 @@ export function AuthProvider({ children }) {
 
   function updateUser(fields) {
     const updated = { ...user, ...fields };
-    if (fields.avatarUrl !== undefined && user?.id) {
-      localStorage.setItem('avatar_' + user.id, fields.avatarUrl);
-    }
     localStorage.setItem('user', JSON.stringify(updated));
     setUser(updated);
   }

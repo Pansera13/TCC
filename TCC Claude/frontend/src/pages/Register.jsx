@@ -54,12 +54,14 @@ export default function Register({ darkMode, setDarkMode }) {
     return e;
   }
 
+  const hasSiteKey = !!import.meta.env.VITE_RECAPTCHA_SITE_KEY;
+
   async function handleSubmit(e) {
     e.preventDefault();
     setApiError('');
     const errs = validate();
     if (Object.keys(errs).length) { setErrors(errs); return; }
-    if (!recaptchaToken) { setApiError('Complete o CAPTCHA.'); return; }
+    if (hasSiteKey && !recaptchaToken) { setApiError('Complete o CAPTCHA.'); return; }
 
     setLoading(true);
     try {
@@ -88,7 +90,7 @@ export default function Register({ darkMode, setDarkMode }) {
     `w-full px-4 py-2.5 rounded-lg border ${errors[field] ? 'border-red-400' : 'border-gray-300 dark:border-gray-700'} bg-gray-50 dark:bg-gray-800 text-gray-800 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-400 transition`;
 
   return (
-    <div className="min-h-screen w-full bg-gradient-to-br from-white to-[#E879F9] dark:from-black dark:to-[#7C3AED] flex flex-col relative transition-colors duration-500">
+    <div className="min-h-screen w-full bg-gradient-to-br from-white via-white to-[#E879F9]/30 dark:from-black dark:via-[#2e1065] dark:to-[#7C3AED] flex flex-col relative transition-colors duration-500">
       <div className="absolute top-4 right-4">
         <button
           onClick={() => setDarkMode(!darkMode)}
@@ -141,28 +143,30 @@ export default function Register({ darkMode, setDarkMode }) {
               <div>
                 <label className="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">Confirmar</label>
                 <div className="relative">
-                  <input name="confirmar" type={showConfirmar ? 'text' : 'password'} value={form.confirmar} onChange={handleChange} placeholder="••••••••" className={inputClass('confirmar') + ' pr-10'} />
+                  <input name="confirmar" type={showConfirmar ? 'text' : 'password'} value={form.confirmar} onChange={handleChange} onPaste={e => e.preventDefault()} placeholder="••••••••" className={inputClass('confirmar') + ' pr-10'} />
                   <button type="button" onClick={() => setShowConfirmar(!showConfirmar)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm" tabIndex={-1}>{showConfirmar ? '🙈' : '👁️'}</button>
                 </div>
                 {errors.confirmar && <p className="text-xs text-red-500 mt-1">{errors.confirmar}</p>}
               </div>
             </div>
 
-            <div className="flex justify-center">
-              <ReCAPTCHA
-                ref={recaptchaRef}
-                sitekey={import.meta.env.VITE_RECAPTCHA_SITE_KEY}
-                onChange={setRecaptchaToken}
-                onExpired={() => setRecaptchaToken('')}
-                theme={darkMode ? 'dark' : 'light'}
-              />
-            </div>
+            {hasSiteKey && (
+              <div className="flex justify-center">
+                <ReCAPTCHA
+                  ref={recaptchaRef}
+                  sitekey={import.meta.env.VITE_RECAPTCHA_SITE_KEY}
+                  onChange={setRecaptchaToken}
+                  onExpired={() => setRecaptchaToken('')}
+                  theme={darkMode ? 'dark' : 'light'}
+                />
+              </div>
+            )}
 
             {apiError && <p className="text-sm text-red-500 text-center">{apiError}</p>}
 
             <button
               type="submit"
-              disabled={loading || !recaptchaToken}
+              disabled={loading || (hasSiteKey && !recaptchaToken)}
               className="w-full py-2.5 rounded-lg font-semibold text-white bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 disabled:opacity-60 transition-all shadow-md"
             >
               {loading ? 'Cadastrando...' : 'CADASTRAR'}

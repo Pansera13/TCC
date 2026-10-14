@@ -6,9 +6,11 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
-    "setup-db": "node src/createTable.js",
+    "test-db": "node src/testConnection.js",
     "seed:20": "node src/seedCategorias.js",
     "seed:100": "node src/seedCategorias100.js",
+    "seed:20-alimentos": "node src/seedProdutos20.js",
+    "cleanup:categorias": "node src/cleanupCategorias.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -20,11 +22,14 @@
     "dotenv": "^18.0.1",
     "express": "^5.2.1",
     "jsonwebtoken": "^9.0.3",
-    "mysql2": "^3.24.4",
     "nodemailer": "^10.0.10",
+    "pg": "^8.23.1",
     "xml2js": "^0.6.2"
   },
   "allowScripts": {
     "bcrypt@6.0.0": true
+  },
+  "devDependencies": {
+    "mysql2": "^3.24.6"
   }
 }

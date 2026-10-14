@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const pool = require('../db');
+const db = require('../db');
 
 async function authMiddleware(req, res, next) {
   const header = req.headers.authorization;
@@ -10,8 +10,7 @@ async function authMiddleware(req, res, next) {
   try {
     const payload = jwt.verify(token, process.env.JWT_SECRET);
     if (!payload.role) {
-      // Tokens antigos sem role — busca no banco
-      const [rows] = await pool.execute('SELECT role, ativo FROM usuarios WHERE id = ?', [payload.id]);
+      const { rows } = await db.query('SELECT role, ativo FROM usuarios WHERE id = $1', [payload.id]);
       if (!rows[0] || !rows[0].ativo) {
         return res.status(401).json({ message: 'Conta inativa ou não encontrada.' });
       }

@@ -1,4 +1,4 @@
-const pool = require('../db');
+const db = require('../db');
 const { logMovement } = require('../services/movementService');
 
 async function createProduct(req, res) {
@@ -15,9 +15,9 @@ async function createProduct(req, res) {
     return res.status(400).json({ message: 'Unidade é obrigatória.' });
   }
 
-  const [result] = await pool.execute(
+  const { rows } = await db.query(
     `INSERT INTO products (nome, quantidade, unidade, peso_kg, categoria, fornecedor)
-     VALUES (?, ?, ?, ?, ?, ?)`,
+     VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
     [
       String(nome).trim(),
       qty,
@@ -29,7 +29,7 @@ async function createProduct(req, res) {
   );
 
   await logMovement({
-    product_id: result.insertId,
+    product_id: rows[0].id,
     product_nome: String(nome).trim(),
     tipo: 'entrada',
     quantidade: qty,
@@ -37,7 +37,7 @@ async function createProduct(req, res) {
     user_nome: req.user.nome,
   });
 
-  return res.status(201).json({ id: result.insertId, message: 'Produto criado com sucesso.' });
+  return res.status(201).json({ id: rows[0].id, message: 'Produto criado com sucesso.' });
 }
 
 async function updateProduct(req, res) {
@@ -55,8 +55,8 @@ async function updateProduct(req, res) {
     return res.status(400).json({ message: 'Unidade é obrigatória.' });
   }
 
-  const [result] = await pool.execute(
-    'UPDATE products SET nome = ?, quantidade = ?, unidade = ?, categoria = ?, fornecedor = ? WHERE id = ?',
+  const { rowCount } = await db.query(
+    `UPDATE products SET nome = $1, quantidade = $2, unidade = $3, categoria = $4, fornecedor = $5 WHERE id = $6`,
     [
       String(nome).trim(),
       qty,
@@ -67,7 +67,7 @@ async function updateProduct(req, res) {
     ]
   );
 
-  if (result.affectedRows === 0) {
+  if (rowCount === 0) {
     return res.status(404).json({ message: 'Produto não encontrado.' });
   }
   return res.json({ message: 'Produto atualizado com sucesso.' });
@@ -81,20 +81,17 @@ async function withdrawProduct(req, res) {
     return res.status(400).json({ message: 'Quantidade inválida.' });
   }
 
-  // Decrement atomically, fails if stock would go negative
-  const [result] = await pool.execute(
-    'UPDATE products SET quantidade = quantidade - ? WHERE id = ? AND quantidade >= ?',
-    [quantidade, id, quantidade]
+  const { rows, rowCount } = await db.query(
+    `UPDATE products SET quantidade = quantidade - $1 WHERE id = $2 AND quantidade >= $1 RETURNING nome`,
+    [quantidade, id]
   );
 
-  if (result.affectedRows === 0) {
-    // Check if product exists or if it's a stock issue
-    const [rows] = await pool.execute('SELECT id, quantidade FROM products WHERE id = ?', [id]);
-    if (rows.length === 0) return res.status(404).json({ message: 'Produto não encontrado.' });
-    return res.status(400).json({ message: `Estoque insuficiente. Disponível: ${rows[0].quantidade}.` });
+  if (rowCount === 0) {
+    const { rows: check } = await db.query('SELECT id, quantidade FROM products WHERE id = $1', [id]);
+    if (check.length === 0) return res.status(404).json({ message: 'Produto não encontrado.' });
+    return res.status(400).json({ message: `Estoque insuficiente. Disponível: ${check[0].quantidade}.` });
   }
 
-  const [rows] = await pool.execute('SELECT nome FROM products WHERE id = ?', [id]);
   await logMovement({
     product_id: id,
     product_nome: rows[0].nome,
@@ -108,8 +105,8 @@ async function withdrawProduct(req, res) {
 }
 
 async function listProducts(req, res) {
-  const [rows] = await pool.execute(
-    'SELECT id, nome, quantidade, unidade, peso_kg, categoria, fornecedor, created_at FROM products ORDER BY created_at DESC'
+  const { rows } = await db.query(
+    `SELECT id, nome, quantidade, unidade, peso_kg, categoria, fornecedor, created_at FROM products ORDER BY created_at DESC`
   );
   return res.json(rows);
 }

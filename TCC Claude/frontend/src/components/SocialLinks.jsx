@@ -3,7 +3,7 @@ const LINKEDIN_URL = 'https://www.linkedin.com/in/lucas-pansera-a80b92320/';
 
 export default function SocialLinks() {
   return (
-    <div className="fixed bottom-0 left-0 flex gap-4 p-6 z-30">
+    <div className="fixed bottom-0 left-0 flex gap-4 p-4 sm:p-6 z-[200]">
       <a href={GITHUB_URL} target="_blank" rel="noreferrer" title="GitHub">
         <div className="w-10 h-10 flex items-center justify-center rounded-full bg-white/40 dark:bg-white/10 hover:bg-white/70 dark:hover:bg-white/20 transition shadow">
           <svg viewBox="0 0 24 24" className="w-5 h-5 fill-gray-700 dark:fill-gray-200">

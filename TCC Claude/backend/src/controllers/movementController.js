@@ -1,8 +1,8 @@
-const pool = require('../db');
+const db = require('../db');
 
 async function listMovements(req, res) {
-  const [rows] = await pool.execute(
-    `SELECT id, product_id, product_nome, tipo, quantidade, user_id, user_nome, created_at
+  const { rows } = await db.query(
+    `SELECT id, product_id, product_nome, tipo, quantidade, user_id, user_nome, origem, pedido_id, created_at
      FROM movements
      ORDER BY created_at DESC
      LIMIT 500`

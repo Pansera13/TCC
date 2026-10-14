@@ -19,7 +19,7 @@ const inputCls = (err) =>
   `w-full px-3 py-2 text-sm rounded-lg border bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 outline-none transition
    ${err ? 'border-red-400 focus:border-red-500' : 'border-gray-200 dark:border-gray-700 focus:border-purple-500'}`;
 
-export default function EditProductModal({ product, onClose, onSaved }) {
+export default function EditProductModal({ product, onClose, onSaved, categories = [] }) {
   const [form, setForm] = useState({
     nome: product.nome,
     quantidade: String(parseFloat(product.quantidade)),
@@ -102,13 +102,14 @@ export default function EditProductModal({ product, onClose, onSaved }) {
           <div className="grid grid-cols-2 gap-3">
             <Field label="Quantidade" required error={errors.quantidade}>
               <input
-                type="number"
-                min="0"
-                step="any"
+                type="text"
+                inputMode="decimal"
                 className={inputCls(errors.quantidade)}
                 value={form.quantidade}
-                onWheel={e => e.currentTarget.blur()}
-                onChange={e => { setForm(f => ({ ...f, quantidade: e.target.value })); setErrors(er => ({ ...er, quantidade: '' })); }}
+                onChange={e => {
+                  const v = e.target.value;
+                  if (v === '' || /^\d*\.?\d*$/.test(v)) { setForm(f => ({ ...f, quantidade: v })); setErrors(er => ({ ...er, quantidade: '' })); }
+                }}
               />
             </Field>
             <Field label="Unidade" required error={errors.unidade}>
@@ -128,7 +129,11 @@ export default function EditProductModal({ product, onClose, onSaved }) {
               value={form.categoria}
               onChange={e => setForm(f => ({ ...f, categoria: e.target.value }))}
               placeholder="Opcional"
+              list="edit-categorias-list"
             />
+            <datalist id="edit-categorias-list">
+              {categories.map(c => <option key={c} value={c} />)}
+            </datalist>
           </Field>
 
           <Field label="Fornecedor">

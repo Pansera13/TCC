@@ -32,11 +32,13 @@ function Step1({ darkMode, onNext }) {
   const [error, setError] = useState('');
   const recaptchaRef = useRef();
 
+  const hasSiteKey = !!import.meta.env.VITE_RECAPTCHA_SITE_KEY;
+
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
-    if (!email || !cpfCnpj || !recaptchaToken) {
-      setError('Preencha todos os campos e complete o CAPTCHA.');
+    if (!email || !cpfCnpj || (hasSiteKey && !recaptchaToken)) {
+      setError('Preencha todos os campos' + (hasSiteKey ? ' e complete o CAPTCHA.' : '.'));
       return;
     }
     setLoading(true);
@@ -73,19 +75,21 @@ function Step1({ darkMode, onNext }) {
             className="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-800 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-400 transition"
           />
         </div>
-        <div className="flex justify-center">
-          <ReCAPTCHA
-            ref={recaptchaRef}
-            sitekey={import.meta.env.VITE_RECAPTCHA_SITE_KEY}
-            onChange={setRecaptchaToken}
-            onExpired={() => setRecaptchaToken('')}
-            theme={darkMode ? 'dark' : 'light'}
-          />
-        </div>
+        {hasSiteKey && (
+          <div className="flex justify-center">
+            <ReCAPTCHA
+              ref={recaptchaRef}
+              sitekey={import.meta.env.VITE_RECAPTCHA_SITE_KEY}
+              onChange={setRecaptchaToken}
+              onExpired={() => setRecaptchaToken('')}
+              theme={darkMode ? 'dark' : 'light'}
+            />
+          </div>
+        )}
         {error && <p className="text-sm text-red-500 text-center">{error}</p>}
         <button
           type="submit"
-          disabled={loading || !recaptchaToken}
+          disabled={loading || (hasSiteKey && !recaptchaToken)}
           className="w-full py-2.5 rounded-lg font-semibold text-white bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 disabled:opacity-60 transition-all shadow-md"
         >
           {loading ? 'Enviando...' : 'AVANÇAR'}
@@ -104,7 +108,8 @@ function Step2({ email, onNext }) {
   const [error, setError] = useState('');
   const [countdown, setCountdown] = useState(59);
   const [canResend, setCanResend] = useState(false);
-  const refs = Array.from({ length: 6 }, () => useRef());
+  const r0 = useRef(), r1 = useRef(), r2 = useRef(), r3 = useRef(), r4 = useRef(), r5 = useRef();
+  const refs = [r0, r1, r2, r3, r4, r5];
 
   useEffect(() => {
     if (countdown <= 0) { setCanResend(true); return; }
@@ -247,7 +252,7 @@ export default function ForgotPassword({ darkMode, setDarkMode }) {
   const [resetToken, setResetToken] = useState('');
 
   return (
-    <div className="min-h-screen w-full bg-gradient-to-br from-white to-[#E879F9] dark:from-black dark:to-[#7C3AED] flex flex-col relative transition-colors duration-500">
+    <div className="min-h-screen w-full bg-gradient-to-br from-white via-white to-[#E879F9]/30 dark:from-black dark:via-[#2e1065] dark:to-[#7C3AED] flex flex-col relative transition-colors duration-500">
       <div className="absolute top-4 right-4">
         <button
           onClick={() => setDarkMode(!darkMode)}

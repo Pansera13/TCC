@@ -42,7 +42,7 @@ export default function Login({ darkMode, setDarkMode }) {
 
   function handleIdentifierChange(e) {
     const raw = e.target.value;
-    if (isNumericInput(raw)) {
+    if (!raw.includes('@') && isNumericInput(raw)) {
       setIdentifier(formatIdentifier(raw));
     } else {
       setIdentifier(raw);
@@ -59,7 +59,7 @@ export default function Login({ darkMode, setDarkMode }) {
     setLoading(true);
     try {
       const { data } = await apiLogin(identifier.trim(), senha);
-      loginUser(data.token, data.nome, data.role, data.id);
+      loginUser(data.token, data.nome, data.role, data.id, data.avatar_url);
       navigate('/dashboard');
     } catch (err) {
       setError(err.response?.data?.message || 'Usuário ou senha inválidos.');
@@ -102,13 +102,13 @@ export default function Login({ darkMode, setDarkMode }) {
             {/* Campo identificador */}
             <div>
               <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1 uppercase tracking-wide">
-                Empresa / CNPJ / CPF
+                Empresa / CNPJ / CPF / E-mail
               </label>
               <input
                 type="text"
                 value={identifier}
                 onChange={handleIdentifierChange}
-                placeholder="Nome da empresa, CNPJ ou CPF"
+                placeholder="Nome da empresa, CNPJ, CPF ou e-mail"
                 className="w-full px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-800 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-400 transition"
               />
             </div>

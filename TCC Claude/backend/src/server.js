@@ -11,7 +11,8 @@ const profileRoutes = require('./routes/profile');
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-app.use(cors({ origin: 'http://localhost:5173' }));
+const ALLOWED_ORIGINS = /^https?:\/\/(localhost|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)(:\d+)?$/;
+app.use(cors({ origin: (origin, cb) => cb(null, !origin || ALLOWED_ORIGINS.test(origin)) }));
 app.use(express.json());
 
 app.use('/api/auth', authRoutes);

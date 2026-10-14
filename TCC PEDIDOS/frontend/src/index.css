@@ -1,0 +1,310 @@
+*, *::before, *::after { box-sizing: border-box; }
+
+/* ── CSS Variables — light / dark ───────────────── */
+:root {
+  --c-bg:           #f9fafb;
+  --c-surface:      #ffffff;
+  --c-surface-2:    #f9fafb;
+  --c-border:       #e5e7eb;
+  --c-border-light: #f3f4f6;
+  --c-text:         #111111;
+  --c-text-muted:   #9ca3af;
+  --c-text-sub:     #6b7280;
+  --c-input:        #ffffff;
+  --c-btn:          #f9fafb;
+  --c-row-sel:      #f0fdf4;
+  --c-summary-bg:   #f9fafb;
+  --c-cat-lanche:   #fef3c7;
+  --c-cat-bebida:   #dbeafe;
+  --c-cat-outro:    #f3f4f6;
+  --c-err-bg:       #fee2e2;
+  --c-err-border:   #fca5a5;
+  --c-warn-bg:      #fef9c3;
+  --c-warn-border:  #fde047;
+  --c-mesa-ras:     #fffbeb;
+  --c-mesa-conf:    #eff6ff;
+  --c-mesa-livre:   #f0fdf4;
+  --c-mesa-ocu:     #fee2e2;
+  --c-mesa-sel:     #dbeafe;
+}
+
+:root.dark {
+  --c-bg:           #0f172a;
+  --c-surface:      #1e293b;
+  --c-surface-2:    #162032;
+  --c-border:       #334155;
+  --c-border-light: #1e293b;
+  --c-text:         #f1f5f9;
+  --c-text-muted:   #64748b;
+  --c-text-sub:     #94a3b8;
+  --c-input:        #1e293b;
+  --c-btn:          #1e293b;
+  --c-row-sel:      #052e16;
+  --c-summary-bg:   #162032;
+  --c-cat-lanche:   #451a03;
+  --c-cat-bebida:   #0c1a3d;
+  --c-cat-outro:    #1e293b;
+  --c-err-bg:       #450a0a;
+  --c-err-border:   #7f1d1d;
+  --c-warn-bg:      #422006;
+  --c-warn-border:  #78350f;
+  --c-mesa-ras:     #1c1007;
+  --c-mesa-conf:    #0c1a3d;
+  --c-mesa-livre:   #052e16;
+  --c-mesa-ocu:     #450a0a;
+  --c-mesa-sel:     #0c1a3d;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  -webkit-text-size-adjust: 100%;
+  background: var(--c-bg);
+  color: var(--c-text);
+  transition: background 0.3s, color 0.3s;
+}
+
+#root {
+  min-height: 100svh;
+}
+
+/* ── Container principal ─────────────────────────── */
+.page {
+  max-width: 700px;
+  margin: 0 auto;
+  padding: 60px 20px 24px;
+}
+@media (max-width: 600px) {
+  .page { padding: 56px 12px 14px; }
+}
+
+/* ── Grade de mesas ─────────────────────────────── */
+.mesa-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+}
+@media (max-width: 480px) { .mesa-grid { gap: 6px; } }
+
+.mesa-btn {
+  padding: 20px 0;
+  font-size: 20px;
+  font-weight: bold;
+  border-radius: 12px;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: transform 0.1s;
+  line-height: 1.2;
+}
+.mesa-btn:active { transform: scale(0.95); }
+
+@media (max-width: 480px) {
+  .mesa-btn     { padding: 12px 2px; font-size: 15px; border-radius: 8px; }
+  .mesa-btn-sub { font-size: 9px !important; margin-top: 2px !important; }
+}
+
+/* ── Tabela com scroll horizontal ───────────────── */
+.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+@media (max-width: 420px) { .col-disp { display: none; } }
+
+/* ── Botões de ação principais ───────────────────── */
+.btn-acao {
+  padding: 10px 18px;
+  border: none;
+  border-radius: 6px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  min-height: 44px;
+  touch-action: manipulation;
+}
+.acoes-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+@media (max-width: 480px) {
+  .btn-acao  { font-size: 14px; width: 100%; }
+  .acoes-row { flex-direction: column; }
+}
+
+/* ── Botões de modal ─────────────────────────────── */
+.modal-action-btn {
+  display: block;
+  width: 100%;
+  padding: 13px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--c-border);
+  background: var(--c-surface-2);
+  color: var(--c-text);
+  cursor: pointer;
+  text-align: left;
+  font-size: 16px;
+  min-height: 48px;
+  touch-action: manipulation;
+  transition: opacity 0.15s, background 0.2s, border-color 0.2s, color 0.2s;
+}
+.modal-action-btn:hover { opacity: 0.85; }
+.modal-action-btn-green {
+  background: #22c55e;
+  color: #fff;
+  border-color: #16a34a;
+  font-weight: 600;
+}
+.modal-action-btn-green:disabled { background: #86efac; color: #166534; }
+
+/* ── Modal — sobe de baixo no celular ────────────── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.45);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 200;
+}
+@media (min-width: 480px) {
+  .modal-overlay { align-items: center; padding: 16px; }
+}
+
+.modal-box {
+  background: var(--c-surface);
+  color: var(--c-text);
+  border-radius: 18px 18px 0 0;
+  padding: 28px 20px 36px;
+  width: 100%;
+  box-shadow: 0 -8px 40px rgba(0,0,0,.2);
+  transition: background 0.3s, color 0.3s;
+}
+@media (min-width: 480px) {
+  .modal-box {
+    border-radius: 14px;
+    max-width: 340px;
+    padding: 28px;
+    box-shadow: 0 24px 64px rgba(0,0,0,.25);
+  }
+}
+
+/* ── Botões +/− de quantidade ───────────────────── */
+.btn-qtd {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: 1px solid var(--c-border);
+  background: var(--c-surface);
+  color: var(--c-text);
+  font-size: 18px;
+  font-weight: bold;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  touch-action: manipulation;
+  flex-shrink: 0;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+}
+.btn-qtd:disabled {
+  background: var(--c-surface-2);
+  color: var(--c-text-muted);
+  cursor: not-allowed;
+}
+
+.input-qtd {
+  width: 52px;
+  padding: 4px 6px;
+  text-align: center;
+  border: 1px solid var(--c-border);
+  border-radius: 4px;
+  font-size: 14px;
+  background: var(--c-input);
+  color: var(--c-text);
+  transition: background 0.2s, border-color 0.2s, color 0.2s;
+}
+
+.qtd-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+/* ── Theme Toggle ────────────────────────────────── */
+.theme-toggle-wrap {
+  position: fixed;
+  top: 14px;
+  right: 14px;
+  z-index: 1000;
+}
+
+.theme-toggle {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: 72px;
+  height: 36px;
+  border-radius: 18px;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  overflow: hidden;
+  background: linear-gradient(to right, #ffc247, #ff852f, #ed5b56);
+  transition: background 0.4s ease, transform 0.15s, box-shadow 0.15s;
+  box-shadow: 0 2px 8px rgba(0,0,0,.2);
+}
+.theme-toggle.dark {
+  background: linear-gradient(to right, #ed5b56, #7047c7, #243dc0);
+}
+.theme-toggle:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0,0,0,.3);
+}
+.theme-toggle:active  { transform: scale(0.96); }
+.theme-toggle:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 3px;
+}
+
+.tgl-icon {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 1;
+  transition: opacity 0.3s, color 0.3s;
+}
+.tgl-sun  { left: 10px; color: #fff9d9; }
+.tgl-moon { right: 10px; color: #e6eaff; }
+.theme-toggle.dark .tgl-sun { color: #c1a4f4; opacity: 0.7; }
+
+.tgl-thumb {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,.3);
+  transition: left 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+}
+.theme-toggle.dark .tgl-thumb { left: 40px; }
+
+.thumb-glow {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: radial-gradient(circle at center, rgba(255,200,60,.55), transparent 70%);
+  transition: background 0.35s;
+}
+.theme-toggle.dark .thumb-glow {
+  background: radial-gradient(circle at center, rgba(100,60,200,.45), transparent 70%);
+}

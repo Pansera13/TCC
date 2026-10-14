@@ -98,7 +98,7 @@ async function login(req, res) {
       { expiresIn: '8h' }
     );
 
-    return res.status(200).json({ token, nome: user.nome, role: user.role || 'admin', id: user.id });
+    return res.status(200).json({ token, nome: user.nome, role: user.role || 'admin', id: user.id, avatar_url: user.avatar_url || null });
   } catch (err) {
     console.error('login error:', err);
     return res.status(500).json({ message: 'Erro interno do servidor.' });

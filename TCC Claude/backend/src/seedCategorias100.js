@@ -1,5 +1,5 @@
 require('dotenv').config();
-const pool = require('./db');
+const db = require('./db');
 
 // [nome, quantidade, unidade]
 const catalogo = {
@@ -54,10 +54,10 @@ async function seed() {
   let inseridos = 0, ignorados = 0;
   for (const [categoria, itens] of Object.entries(catalogo)) {
     for (const [nome, quantidade, unidade] of itens) {
-      const [existe] = await pool.execute('SELECT id FROM products WHERE nome = ?', [nome]);
-      if (existe.length) { ignorados++; console.log(`- ${nome} (já existe, ignorado)`); continue; }
-      await pool.execute(
-        'INSERT INTO products (nome, quantidade, unidade, categoria) VALUES (?, ?, ?, ?)',
+      const { rows } = await db.query(`SELECT id FROM products WHERE nome = $1`, [nome]);
+      if (rows.length) { ignorados++; console.log(`- ${nome} (já existe, ignorado)`); continue; }
+      await db.query(
+        `INSERT INTO products (nome, quantidade, unidade, categoria) VALUES ($1, $2, $3, $4)`,
         [nome, quantidade, unidade, categoria]
       );
       inseridos++;

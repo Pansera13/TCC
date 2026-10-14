@@ -1,5 +1,5 @@
 require('dotenv').config();
-const pool = require('./db');
+const db = require('./db');
 
 const produtos = [
   { nome: 'Arroz Tipo 1',       quantidade: 50,  unidade: 'KG', categoria: 'Grãos' },
@@ -14,8 +14,8 @@ const produtos = [
 
 async function seed() {
   for (const p of produtos) {
-    await pool.execute(
-      'INSERT INTO products (nome, quantidade, unidade, categoria) VALUES (?, ?, ?, ?)',
+    await db.query(
+      `INSERT INTO products (nome, quantidade, unidade, categoria) VALUES ($1, $2, $3, $4)`,
       [p.nome, p.quantidade, p.unidade, p.categoria]
     );
     console.log(`✓ ${p.nome}`);
