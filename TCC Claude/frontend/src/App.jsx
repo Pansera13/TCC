@@ -1,6 +1,7 @@
 import { Component, useEffect, useState } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import SocialLinks from './components/SocialLinks';
 import Dashboard from './pages/Dashboard';
 import ForgotPassword from './pages/ForgotPassword';
 import Login from './pages/Login';
@@ -68,6 +69,7 @@ export default function App() {
             <Route path="/forgot-password" element={<ForgotPassword darkMode={darkMode} setDarkMode={setDarkMode} />} />
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard darkMode={darkMode} setDarkMode={setDarkMode} /></ProtectedRoute>} />
           </Routes>
+          <SocialLinks />
         </BrowserRouter>
       </AuthProvider>
     </ErrorBoundary>

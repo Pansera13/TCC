@@ -5,6 +5,8 @@ import EditProductModal from '../components/EditProductModal';
 import WithdrawModal from '../components/WithdrawModal';
 import AddUserModal from '../components/AddUserModal';
 import ThemeToggle from '../components/ThemeToggle';
+import Pagination from '../components/Pagination';
+import { groupProductsByCategory, paginate } from '../utils/products';
 import api, { listMovements, listUsers, updateUserRole, toggleUserStatus, deleteUser } from '../services/api';
 import { supabase } from '../supabaseClient';
 
@@ -42,6 +44,7 @@ export default function Dashboard({ darkMode, setDarkMode }) {
   const [layoutProdutos, setLayoutProdutos] = useState(() => localStorage.getItem('sf_layout') || 'lista');
   const [tamanhoLayout, setTamanhoLayout] = useState(() => localStorage.getItem('sf_tamanho') || 'm');
   const [categoriasAbertas, setCategoriasAbertas] = useState(new Set());
+  const [pagePorCategoria, setPagePorCategoria] = useState({});
   const [showLayoutMenu, setShowLayoutMenu] = useState(false);
   const layoutMenuRef = useRef(null);
 
@@ -154,6 +157,22 @@ export default function Dashboard({ darkMode, setDarkMode }) {
     if (activeNav === 'equipe' && !usersLoaded && isAdmin) fetchUsers();
   }, [activeNav]);
 
+
+  // Abre o sidebar quando o cursor está nos primeiros 113px da borda esquerda (≈ 3 cm a 96 dpi).
+  // A faixa de baixo (90px) fica de fora para não disparar ao se aproximar dos botões GitHub/LinkedIn.
+  useEffect(() => {
+    function handleMouseMove(e) {
+      if (e.clientX <= 113 && e.clientY < window.innerHeight - 90) setSidebarVisible(true);
+    }
+    window.addEventListener('mousemove', handleMouseMove);
+    return () => window.removeEventListener('mousemove', handleMouseMove);
+  }, []);
+
+  // Esconde os botões sociais (sem colisão) enquanto o sidebar está aberto
+  useEffect(() => {
+    document.documentElement.toggleAttribute('data-sidebar-open', sidebarVisible);
+    return () => document.documentElement.removeAttribute('data-sidebar-open');
+  }, [sidebarVisible]);
 
   // Close profile menu when clicking outside
   useEffect(() => {
@@ -274,7 +293,7 @@ export default function Dashboard({ darkMode, setDarkMode }) {
           ))}
         </div>
 
-        <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
+        <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 w-full lg:w-1/2" style={{ marginInline: 'auto' }}>
           <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
             <h2 className="font-semibold text-gray-800 dark:text-white text-sm">Visão geral dos produtos</h2>
             <button onClick={() => setActiveNav('produtos')} className="text-xs text-purple-600 dark:text-purple-400 hover:underline">
@@ -372,18 +391,19 @@ export default function Dashboard({ darkMode, setDarkMode }) {
   }
 
   function renderProdutos() {
-    const filtered = products.filter(p =>
-      p.nome.toLowerCase().includes(search.toLowerCase().trim())
-    );
-    const grouped = filtered.reduce((acc, p) => {
-      const cat = p.categoria || 'Sem Categoria';
-      if (!acc[cat]) acc[cat] = [];
-      acc[cat].push(p);
-      return acc;
-    }, {});
-    const categorias = Object.keys(grouped).sort((a, b) =>
-      a === 'Sem Categoria' ? 1 : b === 'Sem Categoria' ? -1 : a.localeCompare(b)
-    );
+    const { grouped, categorias } = groupProductsByCategory(products, search);
+    const filtered = categorias.flatMap(cat => grouped[cat]);
+
+    // Buscar volta todas as categorias para a página 1
+    const buscar = (valor) => { setSearch(valor); setPagePorCategoria({}); };
+
+    // Página atual de uma categoria (limitada ao intervalo válido, também quando o Realtime encolhe a lista)
+    const paginaDe = (cat) => paginate(grouped[cat], pagePorCategoria[cat] ?? 1);
+    const irParaPagina = (cat, page) => setPagePorCategoria(prev => ({ ...prev, [cat]: page }));
+    const rodapePaginacao = (cat, className) => {
+      const { page, totalPages } = paginaDe(cat);
+      return <Pagination page={page} totalPages={totalPages} onChange={n => irParaPagina(cat, n)} className={className} />;
+    };
 
     // Tamanho por layout
     const SZ = {
@@ -486,7 +506,12 @@ export default function Dashboard({ darkMode, setDarkMode }) {
                       </div>
                     </td>
                   </tr>,
-                  ...linhasTabela(grouped[cat]),
+                  ...linhasTabela(paginaDe(cat).items),
+                  ...(paginaDe(cat).totalPages > 1 ? [
+                    <tr key={`pg-${cat}`}>
+                      <td colSpan={5}>{rodapePaginacao(cat)}</td>
+                    </tr>,
+                  ] : []),
                 ])}
               </tbody>
             </table>
@@ -535,9 +560,10 @@ export default function Dashboard({ darkMode, setDarkMode }) {
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>{cabecalhoTabela}</thead>
-                  <tbody className="divide-y divide-gray-50 dark:divide-gray-800">{linhasTabela(grouped[cat])}</tbody>
+                  <tbody className="divide-y divide-gray-50 dark:divide-gray-800">{linhasTabela(paginaDe(cat).items)}</tbody>
                 </table>
               </div>
+              {rodapePaginacao(cat, 'border-t border-gray-100 dark:border-gray-800')}
             </div>
           ))}
         </div>
@@ -550,7 +576,7 @@ export default function Dashboard({ darkMode, setDarkMode }) {
         <div key={cat} className="flex flex-col gap-3">
           {catLabel(cat, grouped[cat].length)}
           <div className={`grid ${sz.gradeCols} gap-3`}>
-            {grouped[cat].map(p => (
+            {paginaDe(cat).items.map(p => (
               <div key={p.id} className={`bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800 ${sz.gradeP} flex flex-col gap-2`}>
                 <p className={`font-semibold ${sz.gradeNome} text-gray-800 dark:text-gray-100 leading-snug`}>{p.nome}</p>
                 <div className="flex items-baseline gap-1.5">
@@ -573,6 +599,7 @@ export default function Dashboard({ darkMode, setDarkMode }) {
               </div>
             ))}
           </div>
+          {rodapePaginacao(cat)}
         </div>
       ));
     }
@@ -587,7 +614,7 @@ export default function Dashboard({ darkMode, setDarkMode }) {
             <span className="text-xs text-gray-400 dark:text-gray-500">{grouped[cat].length}</span>
           </div>
           <div className={`grid ${sz.compactoCols} gap-2`}>
-            {grouped[cat].map(p => (
+            {paginaDe(cat).items.map(p => (
               <div key={p.id} className={`bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 ${sz.compactoP} flex flex-col items-center text-center gap-1.5`}>
                 <p className={`font-semibold ${sz.compactoNome} text-gray-800 dark:text-gray-100 leading-tight line-clamp-2 w-full`}>{p.nome}</p>
                 <div className="flex items-baseline gap-1 justify-center">
@@ -609,6 +636,7 @@ export default function Dashboard({ darkMode, setDarkMode }) {
               </div>
             ))}
           </div>
+          {rodapePaginacao(cat)}
         </div>
       ));
     }
@@ -635,7 +663,7 @@ export default function Dashboard({ darkMode, setDarkMode }) {
     const layoutAtual = LAYOUTS.find(l => l.id === layoutProdutos);
 
     return (
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-4 w-full lg:w-1/2" style={{ marginInline: 'auto' }}>
         {/* Toolbar */}
         <div className="flex items-center gap-2 flex-wrap">
           {/* Search */}
@@ -645,10 +673,10 @@ export default function Dashboard({ darkMode, setDarkMode }) {
               className="flex-1 text-sm bg-transparent outline-none text-gray-800 dark:text-gray-100 placeholder:text-gray-400 min-w-0"
               placeholder="Buscar produto por nome…"
               value={search}
-              onChange={e => setSearch(e.target.value)}
+              onChange={e => buscar(e.target.value)}
             />
             {search && (
-              <button onClick={() => setSearch('')} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xs transition shrink-0">✕</button>
+              <button onClick={() => buscar('')} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xs transition shrink-0">✕</button>
             )}
           </div>
 
@@ -1130,9 +1158,9 @@ export default function Dashboard({ darkMode, setDarkMode }) {
           <div className="flex flex-col gap-4">
             {activeNav === 'dashboard'     && renderInicio()}
             {activeNav === 'produtos'      && renderProdutos()}
-            {activeNav === 'categorias'    && renderCategorias()}
+            {activeNav === 'categorias'    && <div className="w-full lg:w-1/2" style={{ marginInline: 'auto' }}>{renderCategorias()}</div>}
             {activeNav === 'movimentacoes' && (
-              <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
+              <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 w-full lg:w-1/2" style={{ marginInline: 'auto' }}>
                 <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
                   <h2 className="font-semibold text-gray-800 dark:text-white text-sm">Histórico de Movimentações</h2>
                   <button onClick={fetchMovements} className="text-xs text-purple-600 dark:text-purple-400 hover:underline">Atualizar</button>
@@ -1140,8 +1168,8 @@ export default function Dashboard({ darkMode, setDarkMode }) {
                 {renderMovimentacoes()}
               </div>
             )}
-            {activeNav === 'sem-estoque' && renderSemEstoque()}
-            {activeNav === 'equipe' && isAdmin && renderEquipe()}
+            {activeNav === 'sem-estoque' && <div className="w-full lg:w-1/2" style={{ marginInline: 'auto' }}>{renderSemEstoque()}</div>}
+            {activeNav === 'equipe' && isAdmin && <div className="w-full lg:w-1/2" style={{ marginInline: 'auto' }}>{renderEquipe()}</div>}
           </div>
         </main>
       </div>
