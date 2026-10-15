@@ -55,22 +55,88 @@ async function updateProduct(req, res) {
     return res.status(400).json({ message: 'Unidade é obrigatória.' });
   }
 
+  const { rows: atuais } = await db.query(
+    'SELECT nome, quantidade, unidade, categoria, fornecedor FROM products WHERE id = $1',
+    [id]
+  );
+  if (atuais.length === 0) {
+    return res.status(404).json({ message: 'Produto não encontrado.' });
+  }
+  const antigo = atuais[0];
+
+  const novo = {
+    nome: String(nome).trim(),
+    quantidade: qty,
+    unidade: String(unidade).trim(),
+    categoria: categoria ? String(categoria).trim() : null,
+    fornecedor: fornecedor ? String(fornecedor).trim() : null,
+  };
+
   const { rowCount } = await db.query(
     `UPDATE products SET nome = $1, quantidade = $2, unidade = $3, categoria = $4, fornecedor = $5 WHERE id = $6`,
-    [
-      String(nome).trim(),
-      qty,
-      String(unidade).trim(),
-      categoria ? String(categoria).trim() : null,
-      fornecedor ? String(fornecedor).trim() : null,
-      id,
-    ]
+    [novo.nome, novo.quantidade, novo.unidade, novo.categoria, novo.fornecedor, id]
   );
 
   if (rowCount === 0) {
     return res.status(404).json({ message: 'Produto não encontrado.' });
   }
+
+  // Auditoria: só registra se algum campo realmente mudou
+  const antes = {};
+  const depois = {};
+  for (const campo of Object.keys(novo)) {
+    const a = campo === 'quantidade' ? parseFloat(antigo[campo]) : (antigo[campo] ?? null);
+    if (a !== novo[campo]) {
+      antes[campo] = a;
+      depois[campo] = novo[campo];
+    }
+  }
+  if (Object.keys(depois).length > 0) {
+    await logMovement({
+      product_id: id,
+      product_nome: novo.nome,
+      tipo: 'edicao',
+      quantidade: 'quantidade' in depois ? Math.abs(depois.quantidade - antes.quantidade) : 0,
+      user_id: req.user.id,
+      user_nome: req.user.nome,
+      detalhes: { antes, depois },
+    });
+  }
+
   return res.json({ message: 'Produto atualizado com sucesso.' });
+}
+
+async function deleteProduct(req, res) {
+  const id = parseInt(req.params.id);
+  if (isNaN(id)) {
+    return res.status(400).json({ message: 'Produto inválido.' });
+  }
+
+  const { rows } = await db.query('SELECT nome, quantidade FROM products WHERE id = $1', [id]);
+  if (rows.length === 0) {
+    return res.status(404).json({ message: 'Produto não encontrado.' });
+  }
+
+  try {
+    await db.query('DELETE FROM products WHERE id = $1', [id]);
+  } catch (err) {
+    // itens_pedido.product_id → products(id) ON DELETE RESTRICT
+    if (err.code === '23503') {
+      return res.status(409).json({ message: 'Produto vinculado a pedidos e não pode ser removido.' });
+    }
+    throw err;
+  }
+
+  await logMovement({
+    product_id: id,
+    product_nome: rows[0].nome,
+    tipo: 'remocao',
+    quantidade: parseFloat(rows[0].quantidade),
+    user_id: req.user.id,
+    user_nome: req.user.nome,
+  });
+
+  return res.json({ message: 'Produto removido com sucesso.' });
 }
 
 async function withdrawProduct(req, res) {
@@ -111,4 +177,4 @@ async function listProducts(req, res) {
   return res.json(rows);
 }
 
-module.exports = { createProduct, updateProduct, withdrawProduct, listProducts };
+module.exports = { createProduct, updateProduct, deleteProduct, withdrawProduct, listProducts };

@@ -6,8 +6,9 @@ import WithdrawModal from '../components/WithdrawModal';
 import AddUserModal from '../components/AddUserModal';
 import ThemeToggle from '../components/ThemeToggle';
 import Pagination from '../components/Pagination';
+import MovementsHistory from '../components/MovementsHistory';
 import { groupProductsByCategory, paginate } from '../utils/products';
-import api, { listMovements, listUsers, updateUserRole, toggleUserStatus, deleteUser } from '../services/api';
+import api, { listUsers, updateUserRole, toggleUserStatus, deleteUser } from '../services/api';
 import { supabase } from '../supabaseClient';
 
 const ALL_NAV_ITEMS = [
@@ -48,11 +49,6 @@ export default function Dashboard({ darkMode, setDarkMode }) {
   const [showLayoutMenu, setShowLayoutMenu] = useState(false);
   const layoutMenuRef = useRef(null);
 
-  // Movements
-  const [movements, setMovements] = useState([]);
-  const [loadingMovements, setLoadingMovements] = useState(false);
-  const [movementsLoaded, setMovementsLoaded] = useState(false);
-
   // Users
   const [users, setUsers] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
@@ -85,19 +81,6 @@ export default function Dashboard({ darkMode, setDarkMode }) {
       // silently fail
     } finally {
       setLoadingProducts(false);
-    }
-  }
-
-  async function fetchMovements() {
-    setLoadingMovements(true);
-    try {
-      const { data } = await listMovements();
-      setMovements(data);
-      setMovementsLoaded(true);
-    } catch {
-      // silently fail
-    } finally {
-      setLoadingMovements(false);
     }
   }
 
@@ -148,10 +131,6 @@ export default function Dashboard({ darkMode, setDarkMode }) {
       clearInterval(poll);
     };
   }, []);
-
-  useEffect(() => {
-    if (activeNav === 'movimentacoes' && !movementsLoaded) fetchMovements();
-  }, [activeNav]);
 
   useEffect(() => {
     if (activeNav === 'equipe' && !usersLoaded && isAdmin) fetchUsers();
@@ -840,73 +819,6 @@ export default function Dashboard({ darkMode, setDarkMode }) {
     );
   }
 
-  function renderMovimentacoes() {
-    if (loadingMovements) {
-      return (
-        <div className="flex flex-col items-center justify-center py-24 text-gray-400 dark:text-gray-600">
-          <span className="text-4xl mb-3 animate-pulse">🔄</span>
-          <p className="text-sm">Carregando movimentações…</p>
-        </div>
-      );
-    }
-    if (movements.length === 0) {
-      return (
-        <div className="flex flex-col items-center justify-center py-24 text-gray-400 dark:text-gray-600">
-          <span className="text-4xl mb-3">🔄</span>
-          <p className="text-sm">Nenhuma movimentação registrada ainda.</p>
-        </div>
-      );
-    }
-    return (
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-left text-xs text-gray-400 dark:text-gray-500 border-b border-gray-100 dark:border-gray-800">
-              <th className="px-4 py-3 font-medium">Data / Hora</th>
-              <th className="px-4 py-3 font-medium">Produto</th>
-              <th className="px-4 py-3 font-medium">Tipo</th>
-              <th className="px-4 py-3 font-medium">Quantidade</th>
-              <th className="px-4 py-3 font-medium">Origem</th>
-              <th className="px-4 py-3 font-medium">Responsável</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
-            {movements.map(m => (
-              <tr key={m.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                <td className="px-4 py-3 text-gray-500 dark:text-gray-400 whitespace-nowrap">{formatDate(m.created_at)}</td>
-                <td className="px-4 py-3 font-medium text-gray-800 dark:text-gray-200">{m.product_nome}</td>
-                <td className="px-4 py-3">
-                  <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium
-                    ${m.tipo === 'entrada'
-                      ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
-                      : 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400'
-                    }`}
-                  >
-                    {m.tipo === 'entrada' ? '↑ Entrada' : '↓ Saída'}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-gray-600 dark:text-gray-400">{m.quantidade}</td>
-                <td className="px-4 py-3">
-                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium
-                    ${m.origem === 'pedido'
-                      ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400'
-                      : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
-                    }`}
-                  >
-                    {m.origem === 'pedido' ? 'Pedido' : 'Estoque'}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-gray-600 dark:text-gray-400">
-                  {m.origem === 'pedido' ? 'Sistema de Pedidos' : (m.user_nome || '—')}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    );
-  }
-
   function renderEquipe() {
     return (
       <>
@@ -1161,11 +1073,10 @@ export default function Dashboard({ darkMode, setDarkMode }) {
             {activeNav === 'categorias'    && <div className="w-full lg:w-1/2" style={{ marginInline: 'auto' }}>{renderCategorias()}</div>}
             {activeNav === 'movimentacoes' && (
               <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 w-full lg:w-1/2" style={{ marginInline: 'auto' }}>
-                <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
+                <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800">
                   <h2 className="font-semibold text-gray-800 dark:text-white text-sm">Histórico de Movimentações</h2>
-                  <button onClick={fetchMovements} className="text-xs text-purple-600 dark:text-purple-400 hover:underline">Atualizar</button>
                 </div>
-                {renderMovimentacoes()}
+                <MovementsHistory />
               </div>
             )}
             {activeNav === 'sem-estoque' && <div className="w-full lg:w-1/2" style={{ marginInline: 'auto' }}>{renderSemEstoque()}</div>}
@@ -1178,7 +1089,7 @@ export default function Dashboard({ darkMode, setDarkMode }) {
       {showModal && (
         <AddProductModal
           onClose={() => setShowModal(false)}
-          onProductsAdded={() => { fetchProducts(); setMovementsLoaded(false); }}
+          onProductsAdded={fetchProducts}
           categories={[...new Set(products.map(p => p.categoria).filter(Boolean))].sort()}
         />
       )}
@@ -1198,7 +1109,6 @@ export default function Dashboard({ darkMode, setDarkMode }) {
               setProducts(prev => prev.map(p =>
                 p.id === withdrawItem.id ? { ...p, quantidade: parseFloat(p.quantidade) - qty } : p
               ));
-              setMovementsLoaded(false);
             }}
         />
       )}

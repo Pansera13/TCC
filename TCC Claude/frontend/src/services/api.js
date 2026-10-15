@@ -27,10 +27,12 @@ export const resetPassword = (resetToken, novaSenha) =>
 
 export const listProducts = () => api.get('/api/products');
 export const createProduct = (data) => api.post('/api/products', data);
+export const deleteProduct = (id) => api.delete(`/api/products/${id}`);
 export const withdrawProduct = (id, quantidade) => api.post(`/api/products/${id}/withdraw`, { quantidade });
 export const queryNfe = (chave) => api.get(`/api/nfe/${encodeURIComponent(chave)}`);
 
-export const listMovements = () => api.get('/api/movements');
+export const listMovements = (params) => api.get('/api/movements', { params });
+export const listMovementUsers = () => api.get('/api/movements/users');
 
 export const listUsers = () => api.get('/api/users');
 export const createUser = (data) => api.post('/api/users', data);

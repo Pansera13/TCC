@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import api from '../services/api';
+import api, { deleteProduct } from '../services/api';
 
 const UNIDADES = ['UN', 'KG', 'L', 'CX'];
 
@@ -29,6 +29,8 @@ export default function EditProductModal({ product, onClose, onSaved, categories
   });
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
+  const [confirmandoRemocao, setConfirmandoRemocao] = useState(false);
+  const [removendo, setRemovendo] = useState(false);
 
   useEffect(() => {
     const handler = (e) => { if (e.key === 'Escape') onClose(); };
@@ -65,6 +67,20 @@ export default function EditProductModal({ product, onClose, onSaved, categories
       setErrors({ _global: err.response?.data?.message || 'Erro ao salvar alterações.' });
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleRemover() {
+    setRemovendo(true);
+    try {
+      await deleteProduct(product.id);
+      onSaved();
+      onClose();
+    } catch (err) {
+      setErrors({ _global: err.response?.data?.message || 'Erro ao remover o produto.' });
+      setConfirmandoRemocao(false);
+    } finally {
+      setRemovendo(false);
     }
   }
 
@@ -160,6 +176,42 @@ export default function EditProductModal({ product, onClose, onSaved, categories
             >
               {loading ? 'Salvando…' : 'Salvar'}
             </button>
+          </div>
+
+          <div className="border-t border-gray-100 dark:border-gray-800 pt-3">
+            {!confirmandoRemocao ? (
+              <button
+                type="button"
+                onClick={() => setConfirmandoRemocao(true)}
+                className="text-xs text-red-500 hover:text-red-600 dark:text-red-400 hover:underline"
+              >
+                Remover produto
+              </button>
+            ) : (
+              <div className="flex flex-col gap-2 rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 px-3 py-3">
+                <p className="text-xs text-red-600 dark:text-red-300">
+                  Remover <strong>{product.nome}</strong>? Essa ação não pode ser desfeita.
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setConfirmandoRemocao(false)}
+                    disabled={removendo}
+                    className="flex-1 px-3 py-1.5 text-xs rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-white dark:hover:bg-gray-800 transition disabled:opacity-50"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleRemover}
+                    disabled={removendo}
+                    className="flex-1 px-3 py-1.5 text-xs rounded-lg bg-red-600 hover:bg-red-700 text-white font-medium transition disabled:opacity-50"
+                  >
+                    {removendo ? 'Removendo…' : 'Sim, remover'}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </form>
       </div>
