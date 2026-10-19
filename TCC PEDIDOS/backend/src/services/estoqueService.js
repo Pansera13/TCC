@@ -1,24 +1,18 @@
-const supabase = require('../supabase');
+const db = require('../db');
 
 async function getProdutos() {
-  const { data, error } = await supabase
-    .from('products')
-    .select('id, nome, quantidade, unidade, categoria')
-    .gt('quantidade', 0)
-    .order('nome');
-
-  if (error) throw new Error(error.message);
-  return data;
+  const { rows } = await db.query(
+    `SELECT id, nome, quantidade::float8 AS quantidade, unidade, categoria
+       FROM products
+      WHERE quantidade > 0
+      ORDER BY nome`
+  );
+  return rows;
 }
 
 async function pagarPedido(pedidoId, userId) {
-  const { data, error } = await supabase.rpc('pagar_pedido', {
-    p_pedido_id: pedidoId,
-    p_user_id: userId,
-  });
-
-  if (error) throw new Error(error.message);
-  return data;
+  const { rows } = await db.query('SELECT pagar_pedido($1::uuid, $2::uuid) AS r', [pedidoId, userId]);
+  return rows[0].r;
 }
 
 module.exports = { getProdutos, pagarPedido };

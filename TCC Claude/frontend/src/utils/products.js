@@ -1,6 +1,9 @@
 // Máximo de produtos exibidos por categoria em cada página (todos os layouts da aba Produtos).
 export const PRODUCTS_PAGE_SIZE = 15;
 
+// Linhas por página nas demais tabelas (Início, Sem estoque, Equipe, Relatórios).
+export const TABLE_PAGE_SIZE = 12;
+
 const SEM_CATEGORIA = 'Sem Categoria';
 
 // Filtra por nome e agrupa por categoria. "Sem Categoria" fica por último.

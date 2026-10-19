@@ -2,8 +2,12 @@ const btn =
   'px-2.5 py-1 text-xs rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 ' +
   'hover:bg-gray-100 dark:hover:bg-gray-800 transition disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent';
 
-// Controles de paginação reutilizados pelas abas Produtos e Movimentações.
-// Não renderiza nada quando há uma página ou menos.
+const select =
+  'px-1.5 py-1 text-xs rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 ' +
+  'text-gray-700 dark:text-gray-200 outline-none focus:border-purple-500';
+
+// Controles de paginação reutilizados pelas tabelas: primeira, anterior, próxima, última,
+// seletor de página direta e "Página X de Y". Não renderiza nada quando há uma página ou menos.
 export default function Pagination({ page, totalPages, onChange, className = '' }) {
   if (totalPages <= 1) return null;
   const first = page <= 1;
@@ -15,6 +19,14 @@ export default function Pagination({ page, totalPages, onChange, className = '' 
       <span className="px-2 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">Página {page} de {totalPages}</span>
       <button type="button" className={btn} disabled={last} onClick={() => onChange(page + 1)} aria-label="Próxima página">Próxima ›</button>
       <button type="button" className={btn} disabled={last} onClick={() => onChange(totalPages)} aria-label="Última página">Última »</button>
+      <label className="flex items-center gap-1 pl-2 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
+        Ir para
+        <select className={select} value={page} onChange={e => onChange(Number(e.target.value))} aria-label="Ir para a página">
+          {Array.from({ length: totalPages }, (_, i) => i + 1).map(n => (
+            <option key={n} value={n}>{n}</option>
+          ))}
+        </select>
+      </label>
     </div>
   );
 }

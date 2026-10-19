@@ -1,5 +1,22 @@
 const bcrypt = require('bcrypt');
 const db = require('../db');
+const { rank, cargoValido, podeGerenciar } = require('../utils/roles');
+
+const NAO_PODE_ALVO = 'Você não pode alterar alguém com cargo superior ao seu.';
+
+// Carrega o cargo do alvo e confere se quem age pode gerenciá-lo. Devolve true se já respondeu com erro.
+async function bloqueiaAlvoSuperior(req, res, id) {
+  const { rows } = await db.query('SELECT role FROM usuarios WHERE id = $1', [id]);
+  if (rows.length === 0) {
+    res.status(404).json({ message: 'Usuário não encontrado.' });
+    return true;
+  }
+  if (!podeGerenciar(req.user.role, rows[0].role)) {
+    res.status(403).json({ message: NAO_PODE_ALVO });
+    return true;
+  }
+  return false;
+}
 
 async function listUsers(req, res) {
   const { rows } = await db.query(
@@ -32,7 +49,10 @@ async function createUser(req, res) {
   }
 
   const senha_hash = await bcrypt.hash(senha, 12);
-  const userRole = ['admin', 'user'].includes(role) ? role : 'user';
+  const userRole = cargoValido(role) ? role : 'user';
+  if (rank(userRole) > rank(req.user.role)) {
+    return res.status(403).json({ message: 'Você não pode criar uma conta com cargo superior ao seu.' });
+  }
 
   const { rows } = await db.query(
     `INSERT INTO usuarios (nome, nome_empresa, cpf_cnpj, email, senha_hash, role)
@@ -47,11 +67,15 @@ async function updateUserRole(req, res) {
   const id = parseInt(req.params.id);
   const { role } = req.body;
 
-  if (!['admin', 'user'].includes(role)) {
+  if (!cargoValido(role)) {
     return res.status(400).json({ message: 'Cargo inválido.' });
   }
   if (id === req.user.id) {
     return res.status(400).json({ message: 'Você não pode alterar seu próprio cargo.' });
+  }
+  if (await bloqueiaAlvoSuperior(req, res, id)) return;
+  if (rank(role) > rank(req.user.role)) {
+    return res.status(403).json({ message: 'Você não pode atribuir um cargo superior ao seu.' });
   }
 
   const { rowCount } = await db.query(
@@ -71,6 +95,7 @@ async function toggleUserStatus(req, res) {
   if (id === req.user.id) {
     return res.status(400).json({ message: 'Você não pode alterar o status da sua própria conta.' });
   }
+  if (await bloqueiaAlvoSuperior(req, res, id)) return;
 
   const { rows } = await db.query(`SELECT ativo FROM usuarios WHERE id = $1`, [id]);
   if (rows.length === 0) {
@@ -89,6 +114,7 @@ async function deleteUser(req, res) {
   if (id === req.user.id) {
     return res.status(400).json({ message: 'Você não pode remover sua própria conta.' });
   }
+  if (await bloqueiaAlvoSuperior(req, res, id)) return;
 
   const { rowCount } = await db.query(`DELETE FROM usuarios WHERE id = $1`, [id]);
   if (rowCount === 0) {

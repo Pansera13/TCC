@@ -1,26 +1,44 @@
 const express = require('express');
 const router = express.Router();
-const supabase = require('../supabase');
+const db = require('../db');
 const auth = require('../middleware/auth');
 const { pagarPedido } = require('../services/estoqueService');
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const ITEM_COLS = 'id, pedido_id, product_id, product_nome, quantidade::float8 AS quantidade, unidade, created_at';
+const PEDIDO_COLS = 'id, status, mesa, estoque_erros, created_at, updated_at';
+
+// Captura exceções de handlers async e responde 500
+const wrap = (fn) => (req, res) =>
+  fn(req, res).catch((err) => res.status(500).json({ message: err.message }));
+
+// Busca o pedido e valida existência/dono. Retorna o pedido ou null (já respondeu).
+async function carregarPedido(req, res) {
+  const id = req.params.id;
+  const { rows } = UUID_RE.test(id)
+    ? await db.query('SELECT id, status, user_id FROM pedidos WHERE id = $1', [id])
+    : { rows: [] };
+  const pedido = rows[0];
+
+  if (!pedido) { res.status(404).json({ message: 'Pedido não encontrado.' }); return null; }
+  if (pedido.user_id !== req.userId) { res.status(403).json({ message: 'Acesso negado.' }); return null; }
+  return pedido;
+}
+
 // POST /pedidos - cria pedido em rascunho
-router.post('/', auth, async (req, res) => {
+router.post('/', auth, wrap(async (req, res) => {
   const mesa = req.body.mesa ? parseInt(req.body.mesa) : null;
 
-  const { data, error } = await supabase
-    .from('pedidos')
-    .insert({ user_id: req.userId, status: 'rascunho', mesa })
-    .select('id, status, mesa, created_at')
-    .single();
-
-  if (error) return res.status(500).json({ message: error.message });
-  return res.status(201).json(data);
-});
+  const { rows } = await db.query(
+    `INSERT INTO pedidos (user_id, status, mesa) VALUES ($1, 'rascunho', $2)
+     RETURNING id, status, mesa, created_at`,
+    [req.userId, Number.isNaN(mesa) ? null : mesa]
+  );
+  return res.status(201).json(rows[0]);
+}));
 
 // POST /pedidos/:id/itens - adiciona item ao pedido
-router.post('/:id/itens', auth, async (req, res) => {
-  const pedidoId = req.params.id;
+router.post('/:id/itens', auth, wrap(async (req, res) => {
   const { product_id, product_nome, quantidade, unidade } = req.body;
 
   const qty = parseFloat(quantidade);
@@ -31,130 +49,84 @@ router.post('/:id/itens', auth, async (req, res) => {
     return res.status(400).json({ message: 'Quantidade deve ser maior que zero.' });
   }
 
-  const { data: pedido, error: pedidoErr } = await supabase
-    .from('pedidos')
-    .select('id, status, user_id')
-    .eq('id', pedidoId)
-    .single();
-
-  if (pedidoErr || !pedido) return res.status(404).json({ message: 'Pedido não encontrado.' });
-  if (pedido.user_id !== req.userId) return res.status(403).json({ message: 'Acesso negado.' });
+  const pedido = await carregarPedido(req, res);
+  if (!pedido) return;
   if (pedido.status !== 'rascunho') {
     return res.status(400).json({ message: 'Só é possível adicionar itens a pedidos em rascunho.' });
   }
 
-  const { data: item, error: itemErr } = await supabase
-    .from('itens_pedido')
-    .insert({ pedido_id: pedidoId, product_id, product_nome, quantidade: qty, unidade: unidade || 'UN' })
-    .select()
-    .single();
-
-  if (itemErr) return res.status(500).json({ message: itemErr.message });
-  return res.status(201).json(item);
-});
+  const { rows } = await db.query(
+    `INSERT INTO itens_pedido (pedido_id, product_id, product_nome, quantidade, unidade)
+     VALUES ($1, $2, $3, $4, $5) RETURNING ${ITEM_COLS}`,
+    [pedido.id, product_id, product_nome, qty, unidade || 'UN']
+  );
+  return res.status(201).json(rows[0]);
+}));
 
 // PATCH /pedidos/:id/itens/:itemId - atualiza quantidade do item
-router.patch('/:id/itens/:itemId', auth, async (req, res) => {
-  const { id: pedidoId, itemId } = req.params;
+router.patch('/:id/itens/:itemId', auth, wrap(async (req, res) => {
   const qty = parseInt(req.body.quantidade);
 
   if (isNaN(qty) || qty < 1) {
     return res.status(400).json({ message: 'Quantidade deve ser um número inteiro maior que zero.' });
   }
 
-  const { data: pedido, error: pedidoErr } = await supabase
-    .from('pedidos').select('id, status, user_id').eq('id', pedidoId).single();
-
-  if (pedidoErr || !pedido) return res.status(404).json({ message: 'Pedido não encontrado.' });
-  if (pedido.user_id !== req.userId) return res.status(403).json({ message: 'Acesso negado.' });
+  const pedido = await carregarPedido(req, res);
+  if (!pedido) return;
   if (pedido.status !== 'rascunho') {
     return res.status(400).json({ message: 'Só é possível editar itens de pedidos em rascunho.' });
   }
 
-  const { data: item, error } = await supabase
-    .from('itens_pedido')
-    .update({ quantidade: qty })
-    .eq('id', itemId)
-    .eq('pedido_id', pedidoId)
-    .select()
-    .single();
+  const { rows } = UUID_RE.test(req.params.itemId)
+    ? await db.query(
+        `UPDATE itens_pedido SET quantidade = $1 WHERE id = $2 AND pedido_id = $3 RETURNING ${ITEM_COLS}`,
+        [qty, req.params.itemId, pedido.id])
+    : { rows: [] };
 
-  if (error) return res.status(500).json({ message: error.message });
-  return res.json(item);
-});
+  if (!rows[0]) return res.status(404).json({ message: 'Item não encontrado.' });
+  return res.json(rows[0]);
+}));
 
 // DELETE /pedidos/:id/itens/:itemId - remove item do pedido
-router.delete('/:id/itens/:itemId', auth, async (req, res) => {
-  const { id: pedidoId, itemId } = req.params;
-
-  const { data: pedido, error: pedidoErr } = await supabase
-    .from('pedidos')
-    .select('id, status, user_id')
-    .eq('id', pedidoId)
-    .single();
-
-  if (pedidoErr || !pedido) return res.status(404).json({ message: 'Pedido não encontrado.' });
-  if (pedido.user_id !== req.userId) return res.status(403).json({ message: 'Acesso negado.' });
+router.delete('/:id/itens/:itemId', auth, wrap(async (req, res) => {
+  const pedido = await carregarPedido(req, res);
+  if (!pedido) return;
   if (pedido.status !== 'rascunho') {
     return res.status(400).json({ message: 'Só é possível remover itens de pedidos em rascunho.' });
   }
 
-  const { error } = await supabase
-    .from('itens_pedido')
-    .delete()
-    .eq('id', itemId)
-    .eq('pedido_id', pedidoId);
-
-  if (error) return res.status(500).json({ message: error.message });
+  if (UUID_RE.test(req.params.itemId)) {
+    await db.query('DELETE FROM itens_pedido WHERE id = $1 AND pedido_id = $2', [req.params.itemId, pedido.id]);
+  }
   return res.json({ message: 'Item removido com sucesso.' });
-});
+}));
 
 // PATCH /pedidos/:id/confirmar - avança para confirmado
-router.patch('/:id/confirmar', auth, async (req, res) => {
-  const pedidoId = req.params.id;
-
-  const { data: pedido, error: pedidoErr } = await supabase
-    .from('pedidos')
-    .select('id, status, user_id')
-    .eq('id', pedidoId)
-    .single();
-
-  if (pedidoErr || !pedido) return res.status(404).json({ message: 'Pedido não encontrado.' });
-  if (pedido.user_id !== req.userId) return res.status(403).json({ message: 'Acesso negado.' });
+router.patch('/:id/confirmar', auth, wrap(async (req, res) => {
+  const pedido = await carregarPedido(req, res);
+  if (!pedido) return;
   if (pedido.status !== 'rascunho') {
     return res.status(400).json({ message: 'Apenas pedidos em rascunho podem ser confirmados.' });
   }
 
-  const { data: itens } = await supabase
-    .from('itens_pedido')
-    .select('id')
-    .eq('pedido_id', pedidoId);
-
-  if (!itens || itens.length === 0) {
+  const { rowCount } = await db.query('SELECT 1 FROM itens_pedido WHERE pedido_id = $1 LIMIT 1', [pedido.id]);
+  if (rowCount === 0) {
     return res.status(400).json({ message: 'Pedido vazio. Adicione ao menos um item antes de confirmar.' });
   }
 
-  const { data: updated, error: updateErr } = await supabase
-    .from('pedidos')
-    .update({ status: 'confirmado' })
-    .eq('id', pedidoId)
-    .select()
-    .single();
+  const { rows } = await db.query(
+    `UPDATE pedidos SET status = 'confirmado', updated_at = NOW() WHERE id = $1 RETURNING *`,
+    [pedido.id]
+  );
+  return res.json(rows[0]);
+}));
 
-  if (updateErr) return res.status(500).json({ message: updateErr.message });
-  return res.json(updated);
-});
-
-// PATCH /pedidos/:id/pagar - baixa estoque de forma atômica via RPC
-router.patch('/:id/pagar', auth, async (req, res) => {
+// PATCH /pedidos/:id/pagar - baixa estoque de forma atômica via função SQL
+router.patch('/:id/pagar', auth, wrap(async (req, res) => {
   const pedidoId = req.params.id;
+  if (!UUID_RE.test(pedidoId)) return res.status(404).json({ message: 'Pedido não encontrado.' });
 
-  let resultado;
-  try {
-    resultado = await pagarPedido(pedidoId, req.userId);
-  } catch (err) {
-    return res.status(500).json({ message: err.message });
-  }
+  const resultado = await pagarPedido(pedidoId, req.userId);
 
   if (!resultado.ok) {
     const mapa = {
@@ -163,104 +135,66 @@ router.patch('/:id/pagar', auth, async (req, res) => {
       status_invalido: 400,
       estoque_insuficiente: 409,
     };
-    const status = mapa[resultado.codigo] || 500;
-    return res.status(status).json({
+    return res.status(mapa[resultado.codigo] || 500).json({
       message: resultado.mensagem,
       erros: resultado.erros || [],
     });
   }
 
-  const { data: pedidoAtualizado, error: fetchErr } = await supabase
-    .from('pedidos')
-    .select('id, status, mesa, estoque_erros, created_at, updated_at')
-    .eq('id', pedidoId)
-    .single();
-
-  if (fetchErr) return res.status(500).json({ message: fetchErr.message });
-  return res.json(pedidoAtualizado);
-});
+  const { rows } = await db.query(`SELECT ${PEDIDO_COLS} FROM pedidos WHERE id = $1`, [pedidoId]);
+  return res.json(rows[0]);
+}));
 
 // PATCH /pedidos/:id/reabrir - volta de confirmado para rascunho
-router.patch('/:id/reabrir', auth, async (req, res) => {
-  const pedidoId = req.params.id;
-
-  const { data: pedido, error: pedidoErr } = await supabase
-    .from('pedidos')
-    .select('id, status, user_id')
-    .eq('id', pedidoId)
-    .single();
-
-  if (pedidoErr || !pedido) return res.status(404).json({ message: 'Pedido não encontrado.' });
-  if (pedido.user_id !== req.userId) return res.status(403).json({ message: 'Acesso negado.' });
+router.patch('/:id/reabrir', auth, wrap(async (req, res) => {
+  const pedido = await carregarPedido(req, res);
+  if (!pedido) return;
   if (pedido.status !== 'confirmado') {
     return res.status(400).json({ message: 'Só é possível reabrir pedidos com status confirmado.' });
   }
 
-  const { data: updated, error: updateErr } = await supabase
-    .from('pedidos')
-    .update({ status: 'rascunho' })
-    .eq('id', pedidoId)
-    .select()
-    .single();
-
-  if (updateErr) return res.status(500).json({ message: updateErr.message });
-  return res.json(updated);
-});
+  const { rows } = await db.query(
+    `UPDATE pedidos SET status = 'rascunho', updated_at = NOW() WHERE id = $1 RETURNING *`,
+    [pedido.id]
+  );
+  return res.json(rows[0]);
+}));
 
 // GET /pedidos/mesas-ocupadas - retorna {mesa, pedido_id, status} para cada mesa ativa
-router.get('/mesas-ocupadas', auth, async (req, res) => {
-  // !inner garante que só retorna pedidos que tenham ao menos 1 item
-  const { data, error } = await supabase
-    .from('pedidos')
-    .select('mesa, id, status, itens_pedido!inner(id)')
-    .in('status', ['rascunho', 'confirmado'])
-    .not('mesa', 'is', null)
-    .order('created_at', { ascending: false });
-
-  if (error) return res.status(500).json({ message: error.message });
-
-  // Uma entrada por mesa (pedido mais recente)
-  const porMesa = {};
-  for (const p of (data || [])) {
-    if (!porMesa[p.mesa]) {
-      porMesa[p.mesa] = { mesa: p.mesa, pedido_id: p.id, status: p.status };
-    }
-  }
-  return res.json(Object.values(porMesa));
-});
+router.get('/mesas-ocupadas', auth, wrap(async (req, res) => {
+  // Só pedidos com ao menos 1 item; uma entrada por mesa (pedido mais recente)
+  const { rows } = await db.query(
+    `SELECT DISTINCT ON (p.mesa) p.mesa, p.id AS pedido_id, p.status
+       FROM pedidos p
+      WHERE p.status IN ('rascunho', 'confirmado')
+        AND p.mesa IS NOT NULL
+        AND EXISTS (SELECT 1 FROM itens_pedido i WHERE i.pedido_id = p.id)
+      ORDER BY p.mesa, p.created_at DESC`
+  );
+  return res.json(rows);
+}));
 
 // GET /pedidos - lista todos os pedidos
-router.get('/', auth, async (req, res) => {
-  const { data, error } = await supabase
-    .from('pedidos')
-    .select('id, status, mesa, estoque_erros, created_at, updated_at')
-    .eq('user_id', req.userId)
-    .order('created_at', { ascending: false });
-
-  if (error) return res.status(500).json({ message: error.message });
-  return res.json(data || []);
-});
+router.get('/', auth, wrap(async (req, res) => {
+  const { rows } = await db.query(
+    `SELECT ${PEDIDO_COLS} FROM pedidos WHERE user_id = $1 ORDER BY created_at DESC`,
+    [req.userId]
+  );
+  return res.json(rows);
+}));
 
 // GET /pedidos/:id - detalhes do pedido com itens
-router.get('/:id', auth, async (req, res) => {
-  const pedidoId = req.params.id;
+router.get('/:id', auth, wrap(async (req, res) => {
+  const pedido = await carregarPedido(req, res);
+  if (!pedido) return;
 
-  const { data: pedido, error: pedidoErr } = await supabase
-    .from('pedidos')
-    .select('id, status, mesa, estoque_erros, created_at, updated_at, user_id')
-    .eq('id', pedidoId)
-    .single();
-
-  if (pedidoErr || !pedido) return res.status(404).json({ message: 'Pedido não encontrado.' });
-  if (pedido.user_id !== req.userId) return res.status(403).json({ message: 'Acesso negado.' });
-
-  const { data: itens } = await supabase
-    .from('itens_pedido')
-    .select('id, product_id, product_nome, quantidade, unidade')
-    .eq('pedido_id', pedidoId);
-
-  const { user_id, ...pedidoSemUserId } = pedido;
-  return res.json({ ...pedidoSemUserId, itens: itens || [] });
-});
+  const { rows: [dados] } = await db.query(`SELECT ${PEDIDO_COLS} FROM pedidos WHERE id = $1`, [pedido.id]);
+  const { rows: itens } = await db.query(
+    `SELECT id, product_id, product_nome, quantidade::float8 AS quantidade, unidade
+       FROM itens_pedido WHERE pedido_id = $1`,
+    [pedido.id]
+  );
+  return res.json({ ...dados, itens });
+}));
 
 module.exports = router;

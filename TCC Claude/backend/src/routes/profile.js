@@ -22,8 +22,8 @@ router.put('/', async (req, res) => {
 });
 
 router.get('/', async (req, res) => {
-  const { rows } = await db.query('SELECT avatar_url FROM usuarios WHERE id = $1', [req.user.id]);
-  return res.json({ avatar_url: rows[0]?.avatar_url || null });
+  const { rows } = await db.query('SELECT avatar_url, role FROM usuarios WHERE id = $1', [req.user.id]);
+  return res.json({ avatar_url: rows[0]?.avatar_url || null, role: rows[0]?.role || null });
 });
 
 module.exports = router;

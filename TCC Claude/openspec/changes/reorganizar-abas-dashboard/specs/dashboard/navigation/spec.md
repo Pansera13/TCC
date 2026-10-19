@@ -6,8 +6,8 @@ Define o conjunto de abas do Dashboard do StockFlow e a navegação entre elas, 
 
 ## ADDED Requirements
 
-### Requirement: Conjunto de abas do menu lateral
-O menu lateral do Dashboard SHALL listar, nesta ordem, as abas Início, Produtos, Movimentações, Relatórios e Equipe. A aba Equipe SHALL aparecer somente para usuários administradores. O sistema SHALL NOT exibir uma aba Categorias.
+### Requirement: Conjunto de abas do menu de navegação
+O menu de navegação do Dashboard SHALL listar, nesta ordem, as abas Início, Produtos, Movimentações, Relatórios e Equipe. A aba Equipe SHALL aparecer somente para usuários administradores. O sistema SHALL NOT exibir uma aba Categorias.
 
 #### Scenario: Usuário comum vê as abas sem Equipe
 - **WHEN** um usuário com papel diferente de administrador abre o Dashboard
@@ -18,7 +18,7 @@ O menu lateral do Dashboard SHALL listar, nesta ordem, as abas Início, Produtos
 - **THEN** o menu lista Início, Produtos, Movimentações, Relatórios e Equipe, nessa ordem
 
 #### Scenario: Aba Categorias não existe
-- **WHEN** qualquer usuário navega pelo menu lateral
+- **WHEN** qualquer usuário navega pelo menu de navegação
 - **THEN** não há item "Categorias" e nenhuma ação da interface leva a uma tela de categorias
 
 ### Requirement: Aba Sem estoque continua acessível pelo card

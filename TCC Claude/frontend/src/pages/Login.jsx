@@ -28,7 +28,16 @@ export default function Login({ darkMode, setDarkMode }) {
   const [senha, setSenha] = useState('');
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  // Aviso deixado por uma sessão encerrada (ex.: conta desativada)
+  const [error, setError] = useState(() => {
+    try {
+      const aviso = sessionStorage.getItem('sf_aviso');
+      sessionStorage.removeItem('sf_aviso');
+      return aviso || '';
+    } catch {
+      return '';
+    }
+  });
   const [success, setSuccess] = useState('');
   const { loginUser } = useAuth();
   const navigate = useNavigate();

@@ -1,14 +1,13 @@
-require('dotenv').config();
-const supabase = require('./supabase');
+const db = require('./db');
 
 async function main() {
-  const { error: e1 } = await supabase.from('products').select('id').limit(1);
-  if (e1) { console.error('ERRO: products -', e1.message); process.exit(1); }
-  console.log('OK: products');
+  const { rows: [p] } = await db.query('SELECT COUNT(*)::int AS n FROM products');
+  console.log(`OK: products (${p.n} produtos)`);
 
-  const { error: e2 } = await supabase.from('pedidos').select('id').limit(1);
-  if (e2) { console.error('ERRO: pedidos -', e2.message); process.exit(1); }
-  console.log('OK: pedidos');
+  const { rows: [o] } = await db.query('SELECT COUNT(*)::int AS n FROM pedidos');
+  console.log(`OK: pedidos (${o.n} pedidos)`);
 }
 
-main().catch(err => { console.error(err.message); process.exit(1); });
+main()
+  .catch(err => { console.error('ERRO:', err.message); process.exitCode = 1; })
+  .finally(() => db.end());

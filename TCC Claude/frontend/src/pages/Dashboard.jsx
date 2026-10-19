@@ -4,22 +4,31 @@ import AddProductModal from '../components/AddProductModal';
 import EditProductModal from '../components/EditProductModal';
 import WithdrawModal from '../components/WithdrawModal';
 import AddUserModal from '../components/AddUserModal';
-import ThemeToggle from '../components/ThemeToggle';
+import TopNav from '../components/TopNav';
 import Pagination from '../components/Pagination';
 import MovementsHistory from '../components/MovementsHistory';
-import { groupProductsByCategory, paginate } from '../utils/products';
+import Reports from '../components/Reports';
+import { groupProductsByCategory, paginate, TABLE_PAGE_SIZE } from '../utils/products';
+import { useFitRows } from '../utils/useFitRows';
+import SortTh from '../components/SortTh';
+import { ROLES, isGestor, podeGerenciar, cargosAtribuiveis, corCargo } from '../utils/roles';
+import { sortRows, proximaOrdem } from '../utils/sort';
+import { zebra, TABLE_WRAP } from '../utils/tables';
 import api, { listUsers, updateUserRole, toggleUserStatus, deleteUser } from '../services/api';
 import { supabase } from '../supabaseClient';
 
 const ALL_NAV_ITEMS = [
   { id: 'dashboard',     label: 'Início',          icon: '🏠' },
   { id: 'produtos',      label: 'Produtos',         icon: '📦' },
-  { id: 'categorias',    label: 'Categorias',       icon: '🗂️' },
   { id: 'movimentacoes', label: 'Movimentações',    icon: '🔄' },
+  { id: 'relatorios',     label: 'Relatórios',       icon: '📊' },
   { id: 'equipe',        label: 'Equipe',           icon: '👥', adminOnly: true },
 ];
 
 const LOW_STOCK_THRESHOLD = 3;
+
+const fmtPeso = (p) => (p.peso_kg === null || p.peso_kg === undefined || p.peso_kg === '' ? '—' : Number(p.peso_kg).toLocaleString('pt-BR', { maximumFractionDigits: 3 }));
+const fmtData = (iso) => (iso ? new Date(iso).toLocaleDateString('pt-BR') : '—');
 
 function formatDate(iso) {
   if (!iso) return '—';
@@ -29,11 +38,10 @@ function formatDate(iso) {
 
 export default function Dashboard({ darkMode, setDarkMode }) {
   const { user, logoutUser, updateUser } = useAuth();
-  const isAdmin = user?.role === 'admin';
+  // Funções de gestão: administrador e sócio
+  const isAdmin = isGestor(user?.role);
 
   const [activeNav, setActiveNav] = useState('dashboard');
-  const [sidebarVisible, setSidebarVisible] = useState(false);
-  const sidebarRef = useRef(null);
 
   // Products
   const [showModal, setShowModal] = useState(false);
@@ -41,11 +49,22 @@ export default function Dashboard({ darkMode, setDarkMode }) {
   const [withdrawItem, setWithdrawItem] = useState(null);
   const [products, setProducts] = useState([]);
   const [loadingProducts, setLoadingProducts] = useState(false);
+  const produtosCarregadosRef = useRef(false);
   const [search, setSearch] = useState('');
   const [layoutProdutos, setLayoutProdutos] = useState(() => localStorage.getItem('sf_layout') || 'lista');
   const [tamanhoLayout, setTamanhoLayout] = useState(() => localStorage.getItem('sf_tamanho') || 'm');
   const [categoriasAbertas, setCategoriasAbertas] = useState(new Set());
   const [pagePorCategoria, setPagePorCategoria] = useState({});
+  const [pagTabelas, setPagTabelas] = useState({ inicio: 1, esgotados: 1, equipe: 1 });
+  // Linhas que cabem na área da tabela ativa (Início, Sem estoque ou Equipe), sem rolagem vertical
+  const [areaTabelaRef, linhasPorPagina] = useFitRows(TABLE_PAGE_SIZE);
+  // Ordenação por coluna de cada tabela (null = ordem original)
+  const [ordem, setOrdem] = useState({ inicio: null, esgotados: null, produtos: null, equipe: null });
+  function alternarOrdem(tabela, key) {
+    setOrdem(o => ({ ...o, [tabela]: proximaOrdem(o[tabela], key) }));
+    if (tabela === 'produtos') setPagePorCategoria({});
+    else setPagTabelas(p => ({ ...p, [tabela]: 1 }));
+  }
   const [showLayoutMenu, setShowLayoutMenu] = useState(false);
   const layoutMenuRef = useRef(null);
 
@@ -72,11 +91,13 @@ export default function Dashboard({ darkMode, setDarkMode }) {
     { label: 'Sem Estoque',        value: products.filter(p => p.quantidade === 0).length || '—', icon: '❌', color: 'from-red-500 to-red-700' },
   ];
 
+  // A tela "Carregando…" só aparece na primeira leitura; as seguintes (polling, salvar, etc.) atualizam em silêncio
   async function fetchProducts() {
-    setLoadingProducts(true);
+    if (!produtosCarregadosRef.current) setLoadingProducts(true);
     try {
       const { data } = await api.get('/api/products');
       setProducts(data);
+      produtosCarregadosRef.current = true;
     } catch {
       // silently fail
     } finally {
@@ -85,7 +106,7 @@ export default function Dashboard({ darkMode, setDarkMode }) {
   }
 
   async function fetchUsers() {
-    setLoadingUsers(true);
+    if (!usersLoaded) setLoadingUsers(true);
     try {
       const { data } = await listUsers();
       setUsers(data);
@@ -105,6 +126,8 @@ export default function Dashboard({ darkMode, setDarkMode }) {
       if (data.avatar_url && data.avatar_url !== user?.avatarUrl) {
         updateUser({ avatarUrl: data.avatar_url });
       }
+      // Mantém o cargo da sessão igual ao do banco (sessão antiga pode ter cargo desatualizado ou ausente)
+      if (data.role && data.role !== user?.role) updateUser({ role: data.role });
     }).catch(() => {});
   }, []);
 
@@ -137,22 +160,6 @@ export default function Dashboard({ darkMode, setDarkMode }) {
   }, [activeNav]);
 
 
-  // Abre o sidebar quando o cursor está nos primeiros 113px da borda esquerda (≈ 3 cm a 96 dpi).
-  // A faixa de baixo (90px) fica de fora para não disparar ao se aproximar dos botões GitHub/LinkedIn.
-  useEffect(() => {
-    function handleMouseMove(e) {
-      if (e.clientX <= 113 && e.clientY < window.innerHeight - 90) setSidebarVisible(true);
-    }
-    window.addEventListener('mousemove', handleMouseMove);
-    return () => window.removeEventListener('mousemove', handleMouseMove);
-  }, []);
-
-  // Esconde os botões sociais (sem colisão) enquanto o sidebar está aberto
-  useEffect(() => {
-    document.documentElement.toggleAttribute('data-sidebar-open', sidebarVisible);
-    return () => document.documentElement.removeAttribute('data-sidebar-open');
-  }, [sidebarVisible]);
-
   // Close profile menu when clicking outside
   useEffect(() => {
     function handleClick(e) {
@@ -176,8 +183,8 @@ export default function Dashboard({ darkMode, setDarkMode }) {
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
 
-  async function handleToggleRole(u) {
-    const newRole = u.role === 'admin' ? 'user' : 'admin';
+  async function handleChangeRole(u, newRole) {
+    if (newRole === u.role) return;
     try {
       await updateUserRole(u.id, newRole);
       setUsers(prev => prev.map(x => x.id === u.id ? { ...x, role: newRole } : x));
@@ -246,33 +253,42 @@ export default function Dashboard({ darkMode, setDarkMode }) {
   // ─── Renderers ──────────────────────────────────────────────────
 
   function renderInicio() {
+    const pagInicio = paginate(sortRows(products, ordem.inicio), pagTabelas.inicio, linhasPorPagina);
     return (
       <>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {METRICS.map(metric => (
             metric.label === 'Sem Estoque'
               ? (
                 <button
                   key={metric.label}
                   onClick={() => setActiveNav('sem-estoque')}
-                  className={`bg-gradient-to-br ${metric.color} rounded-2xl p-5 text-white shadow-md text-left cursor-pointer hover:opacity-90 transition-opacity`}
+                  className={`bg-gradient-to-br ${metric.color} rounded-2xl p-3 pl-[15px] text-white shadow-md text-left cursor-pointer hover:opacity-90 transition-opacity`}
                 >
-                  <div className="text-2xl mb-2">{metric.icon}</div>
-                  <div className="text-3xl font-bold">{metric.value}</div>
-                  <div className="text-xs opacity-80 mt-1">{metric.label}</div>
+                  <div className="flex items-center gap-3">
+                    <div className="text-2xl">{metric.icon}</div>
+                    <div>
+                      <div className="text-2xl font-bold leading-none">{metric.value}</div>
+                      <div className="text-xs opacity-80 mt-1">{metric.label}</div>
+                    </div>
+                  </div>
                 </button>
               )
               : (
-                <div key={metric.label} className={`bg-gradient-to-br ${metric.color} rounded-2xl p-5 text-white shadow-md`}>
-                  <div className="text-2xl mb-2">{metric.icon}</div>
-                  <div className="text-3xl font-bold">{metric.value}</div>
-                  <div className="text-xs opacity-80 mt-1">{metric.label}</div>
+                <div key={metric.label} className={`bg-gradient-to-br ${metric.color} rounded-2xl p-3 pl-[15px] text-white shadow-md`}>
+                  <div className="flex items-center gap-3">
+                    <div className="text-2xl">{metric.icon}</div>
+                    <div>
+                      <div className="text-2xl font-bold leading-none">{metric.value}</div>
+                      <div className="text-xs opacity-80 mt-1">{metric.label}</div>
+                    </div>
+                  </div>
                 </div>
               )
           ))}
         </div>
 
-        <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 w-full lg:w-1/2" style={{ marginInline: 'auto' }}>
+        <div className={`bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 flex-1 min-h-0 flex flex-col ${TABLE_WRAP}`}>
           <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
             <h2 className="font-semibold text-gray-800 dark:text-white text-sm">Visão geral dos produtos</h2>
             <button onClick={() => setActiveNav('produtos')} className="text-xs text-purple-600 dark:text-purple-400 hover:underline">
@@ -290,32 +306,39 @@ export default function Dashboard({ darkMode, setDarkMode }) {
               <p className="text-sm">Nenhum produto cadastrado ainda.</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+            <div ref={areaTabelaRef} className="overflow-x-auto overflow-y-hidden flex-1 min-h-0">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-left text-xs text-gray-400 dark:text-gray-500 border-b border-gray-100 dark:border-gray-800">
-                    <th className="px-4 py-3 font-medium">Nome</th>
-                    <th className="px-4 py-3 font-medium whitespace-nowrap">Qtd.</th>
-                    <th className="px-4 py-3 font-medium whitespace-nowrap">Un.</th>
-                    <th className="px-4 py-3 font-medium whitespace-nowrap">Categoria</th>
-                    <th className="px-4 py-3 font-medium whitespace-nowrap">Fornecedor</th>
+                    <SortTh k="nome" ordem={ordem.inicio} onSort={k => alternarOrdem('inicio', k)} className="px-4 py-3 font-medium">Nome</SortTh>
+                    <SortTh k="quantidade" ordem={ordem.inicio} onSort={k => alternarOrdem('inicio', k)} className="px-4 py-3 font-medium whitespace-nowrap">Qtd.</SortTh>
+                    <SortTh k="unidade" ordem={ordem.inicio} onSort={k => alternarOrdem('inicio', k)} className="px-4 py-3 font-medium whitespace-nowrap">Un.</SortTh>
+                    <SortTh k="categoria" ordem={ordem.inicio} onSort={k => alternarOrdem('inicio', k)} className="px-4 py-3 font-medium whitespace-nowrap hide-lt-850">Categoria</SortTh>
+                    <SortTh k="fornecedor" ordem={ordem.inicio} onSort={k => alternarOrdem('inicio', k)} className="px-4 py-3 font-medium whitespace-nowrap hide-lt-1100">Fornecedor</SortTh>
+                    <SortTh k="peso_kg" ordem={ordem.inicio} onSort={k => alternarOrdem('inicio', k)} className="px-4 py-3 font-medium whitespace-nowrap hide-lt-1350">Peso (kg)</SortTh>
+                    <SortTh k="created_at" ordem={ordem.inicio} onSort={k => alternarOrdem('inicio', k)} className="px-4 py-3 font-medium whitespace-nowrap hide-lt-1350">Cadastro</SortTh>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
-                  {products.map(p => (
-                    <tr key={p.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                      <td className="px-4 py-3 font-medium text-gray-800 dark:text-gray-200">{p.nome}</td>
-                      <td className="px-4 py-3 whitespace-nowrap">
+                  {pagInicio.items.map((p, i) => (
+                    <tr key={p.id} className={zebra(i)}>
+                      <td className="px-4 py-1.5 font-medium whitespace-normal sm:whitespace-nowrap text-gray-800 dark:text-gray-200" title={p.nome}>{p.nome}</td>
+                      <td className="px-4 py-1.5 whitespace-nowrap">
                         <span className={parseFloat(p.quantidade) === 0 ? 'text-red-500 font-semibold' : parseFloat(p.quantidade) <= LOW_STOCK_THRESHOLD ? 'text-yellow-500 font-semibold' : 'text-gray-600 dark:text-gray-400'}>{parseFloat(p.quantidade)}</span>
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-gray-600 dark:text-gray-400">{p.unidade}</td>
-                      <td className="px-4 py-3 whitespace-nowrap text-gray-500 dark:text-gray-500">{p.categoria || '—'}</td>
-                      <td className="px-4 py-3 whitespace-nowrap text-gray-500 dark:text-gray-500">{p.fornecedor || '—'}</td>
+                      <td className="px-4 py-1.5 whitespace-nowrap text-gray-600 dark:text-gray-400">{p.unidade}</td>
+                      <td className="px-4 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-500 hide-lt-850">{p.categoria || '—'}</td>
+                      <td className="px-4 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-500 hide-lt-1100">{p.fornecedor || '—'}</td>
+                      <td className="px-4 py-1.5 whitespace-nowrap text-gray-600 dark:text-gray-400 hide-lt-1350">{fmtPeso(p)}</td>
+                      <td className="px-4 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-500 hide-lt-1350">{fmtData(p.created_at)}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
+            <Pagination page={pagInicio.page} totalPages={pagInicio.totalPages} onChange={n => setPagTabelas(s => ({ ...s, inicio: n }))} className="shrink-0 border-t border-gray-100 dark:border-gray-800" />
+            </>
           )}
         </div>
       </>
@@ -326,9 +349,10 @@ export default function Dashboard({ darkMode, setDarkMode }) {
     const esgotados = products
       .filter(p => parseFloat(p.quantidade) === 0)
       .sort((a, b) => (a.categoria || 'Sem Categoria').localeCompare(b.categoria || 'Sem Categoria'));
+    const pagEsgotados = paginate(sortRows(esgotados, ordem.esgotados), pagTabelas.esgotados, linhasPorPagina);
 
     return (
-      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
+      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 flex-1 min-h-0 flex flex-col">
         <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span>❌</span>
@@ -346,24 +370,35 @@ export default function Dashboard({ darkMode, setDarkMode }) {
             <p className="text-sm">Nenhum produto esgotado no momento.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          <div ref={areaTabelaRef} className="overflow-x-auto overflow-y-hidden flex-1 min-h-0">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-xs text-gray-400 dark:text-gray-500 border-b border-gray-100 dark:border-gray-800">
-                  <th className="px-4 py-3 font-medium">Nome</th>
-                  <th className="px-4 py-3 font-medium whitespace-nowrap">Categoria</th>
+                  <SortTh k="nome" ordem={ordem.esgotados} onSort={k => alternarOrdem('esgotados', k)} className="px-4 py-3 font-medium">Nome</SortTh>
+                  <SortTh k="categoria" ordem={ordem.esgotados} onSort={k => alternarOrdem('esgotados', k)} className="px-4 py-3 font-medium whitespace-nowrap hide-lt-850">Categoria</SortTh>
+                  <SortTh k="unidade" ordem={ordem.esgotados} onSort={k => alternarOrdem('esgotados', k)} className="px-4 py-3 font-medium whitespace-nowrap">Un.</SortTh>
+                  <SortTh k="fornecedor" ordem={ordem.esgotados} onSort={k => alternarOrdem('esgotados', k)} className="px-4 py-3 font-medium whitespace-nowrap hide-lt-1100">Fornecedor</SortTh>
+                  <SortTh k="peso_kg" ordem={ordem.esgotados} onSort={k => alternarOrdem('esgotados', k)} className="px-4 py-3 font-medium whitespace-nowrap hide-lt-1350">Peso (kg)</SortTh>
+                  <SortTh k="created_at" ordem={ordem.esgotados} onSort={k => alternarOrdem('esgotados', k)} className="px-4 py-3 font-medium whitespace-nowrap hide-lt-1350">Cadastro</SortTh>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
-                {esgotados.map(p => (
-                  <tr key={p.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                    <td className="px-4 py-3 font-medium text-gray-800 dark:text-gray-200">{p.nome}</td>
-                    <td className="px-4 py-3 whitespace-nowrap text-gray-500 dark:text-gray-500">{p.categoria || 'Sem Categoria'}</td>
+                {pagEsgotados.items.map((p, i) => (
+                  <tr key={p.id} className={zebra(i)}>
+                    <td className="px-4 py-1.5 font-medium whitespace-normal sm:whitespace-nowrap text-gray-800 dark:text-gray-200" title={p.nome}>{p.nome}</td>
+                    <td className="px-4 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-500 hide-lt-850">{p.categoria || 'Sem Categoria'}</td>
+                    <td className="px-4 py-1.5 whitespace-nowrap text-gray-600 dark:text-gray-400">{p.unidade}</td>
+                    <td className="px-4 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-500 hide-lt-1100">{p.fornecedor || '—'}</td>
+                    <td className="px-4 py-1.5 whitespace-nowrap text-gray-600 dark:text-gray-400 hide-lt-1350">{fmtPeso(p)}</td>
+                    <td className="px-4 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-500 hide-lt-1350">{fmtData(p.created_at)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+          <Pagination page={pagEsgotados.page} totalPages={pagEsgotados.totalPages} onChange={n => setPagTabelas(s => ({ ...s, esgotados: n }))} className="shrink-0 border-t border-gray-100 dark:border-gray-800" />
+          </>
         )}
       </div>
     );
@@ -371,6 +406,8 @@ export default function Dashboard({ darkMode, setDarkMode }) {
 
   function renderProdutos() {
     const { grouped, categorias } = groupProductsByCategory(products, search);
+    // Ordenação por coluna dentro de cada categoria
+    if (ordem.produtos) for (const cat of categorias) grouped[cat] = sortRows(grouped[cat], ordem.produtos);
     const filtered = categorias.flatMap(cat => grouped[cat]);
 
     // Buscar volta todas as categorias para a página 1
@@ -394,14 +431,14 @@ export default function Dashboard({ darkMode, setDarkMode }) {
         compactoP: 'p-2',   compactoNome: 'text-xs', compactoQty: 'text-sm',
       },
       m: {
-        tablePy: 'py-2.5',  tableText: 'text-sm',
+        tablePy: 'py-1.5',  tableText: 'text-sm',
         gradeCols: 'grid-cols-3 lg:grid-cols-4',
         gradeP: 'p-4',      gradeNome: 'text-sm',   gradeQty: 'text-xl',
         compactoCols: 'grid-cols-3 lg:grid-cols-5',
         compactoP: 'p-3',   compactoNome: 'text-xs', compactoQty: 'text-base',
       },
       g: {
-        tablePy: 'py-4',    tableText: 'text-base',
+        tablePy: 'py-2.5',    tableText: 'text-base',
         gradeCols: 'grid-cols-2 lg:grid-cols-3',
         gradeP: 'p-5',      gradeNome: 'text-base',  gradeQty: 'text-2xl',
         compactoCols: 'grid-cols-3 lg:grid-cols-4',
@@ -426,24 +463,28 @@ export default function Dashboard({ darkMode, setDarkMode }) {
 
     const cabecalhoTabela = (
       <tr className="text-left text-xs text-gray-400 dark:text-gray-500 border-b border-gray-100 dark:border-gray-800">
-        <th className={`px-4 ${sz.tablePy} font-medium`}>Nome</th>
-        <th className={`px-4 ${sz.tablePy} font-medium whitespace-nowrap`}>Qtd.</th>
-        <th className={`px-4 ${sz.tablePy} font-medium whitespace-nowrap`}>Un.</th>
-        <th className={`px-4 ${sz.tablePy} font-medium whitespace-nowrap`}>Fornecedor</th>
+        <SortTh k="nome" ordem={ordem.produtos} onSort={k => alternarOrdem('produtos', k)} className={`px-4 ${sz.tablePy} font-medium`}>Nome</SortTh>
+        <SortTh k="quantidade" ordem={ordem.produtos} onSort={k => alternarOrdem('produtos', k)} className={`px-4 ${sz.tablePy} font-medium whitespace-nowrap`}>Qtd.</SortTh>
+        <SortTh k="unidade" ordem={ordem.produtos} onSort={k => alternarOrdem('produtos', k)} className={`px-4 ${sz.tablePy} font-medium whitespace-nowrap`}>Un.</SortTh>
+        <SortTh k="fornecedor" ordem={ordem.produtos} onSort={k => alternarOrdem('produtos', k)} className={`px-4 ${sz.tablePy} font-medium whitespace-nowrap hide-lt-1100`}>Fornecedor</SortTh>
+        <SortTh k="peso_kg" ordem={ordem.produtos} onSort={k => alternarOrdem('produtos', k)} className={`px-4 ${sz.tablePy} font-medium whitespace-nowrap hide-lt-1350`}>Peso (kg)</SortTh>
+        <SortTh k="created_at" ordem={ordem.produtos} onSort={k => alternarOrdem('produtos', k)} className={`px-4 ${sz.tablePy} font-medium whitespace-nowrap hide-lt-1350`}>Cadastro</SortTh>
         <th className={`px-4 ${sz.tablePy} font-medium`}></th>
       </tr>
     );
 
-    const linhasTabela = (prods) => prods.map(p => (
-      <tr key={p.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+    const linhasTabela = (prods) => prods.map((p, i) => (
+      <tr key={p.id} className={zebra(i)}>
         <td className={`px-4 ${sz.tablePy} font-medium ${sz.tableText} text-gray-800 dark:text-gray-200`}>{p.nome}</td>
         <td className={`px-4 ${sz.tablePy} whitespace-nowrap`}>
           <span className={`${sz.tableText} ${qtyClass(p)}`}>{parseFloat(p.quantidade)}</span>
         </td>
         <td className={`px-4 ${sz.tablePy} whitespace-nowrap ${sz.tableText} text-gray-600 dark:text-gray-400`}>{p.unidade}</td>
-        <td className={`px-4 ${sz.tablePy} whitespace-nowrap ${sz.tableText} text-gray-500 dark:text-gray-500`}>{p.fornecedor || '—'}</td>
+        <td className={`px-4 ${sz.tablePy} whitespace-nowrap ${sz.tableText} text-gray-500 dark:text-gray-500 hide-lt-1100`}>{p.fornecedor || '—'}</td>
+        <td className={`px-4 ${sz.tablePy} whitespace-nowrap ${sz.tableText} text-gray-600 dark:text-gray-400 hide-lt-1350`}>{fmtPeso(p)}</td>
+        <td className={`px-4 ${sz.tablePy} whitespace-nowrap ${sz.tableText} text-gray-500 dark:text-gray-500 hide-lt-1350`}>{fmtData(p.created_at)}</td>
         <td className={`px-4 ${sz.tablePy}`}>
-          <div className="flex gap-1.5">
+          <div className="flex flex-wrap gap-1.5">
             <button onClick={() => setWithdrawItem(p)} disabled={parseFloat(p.quantidade) === 0}
               className="px-3 py-1.5 text-xs rounded-lg border border-red-200 dark:border-red-800 text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition disabled:opacity-40 disabled:cursor-not-allowed">
               Retirar
@@ -477,7 +518,7 @@ export default function Dashboard({ darkMode, setDarkMode }) {
               <tbody>
                 {categorias.flatMap(cat => [
                   <tr key={`hdr-${cat}`} className="bg-gray-50/80 dark:bg-gray-800/60 border-t-2 border-gray-100 dark:border-gray-700">
-                    <td colSpan={5} className="px-4 py-2">
+                    <td colSpan={7} className="px-4 py-2">
                       <div className="flex items-center gap-2">
                         <span className="text-sm">🗂️</span>
                         <span className="font-semibold text-sm text-gray-700 dark:text-gray-200">{cat}</span>
@@ -488,7 +529,7 @@ export default function Dashboard({ darkMode, setDarkMode }) {
                   ...linhasTabela(paginaDe(cat).items),
                   ...(paginaDe(cat).totalPages > 1 ? [
                     <tr key={`pg-${cat}`}>
-                      <td colSpan={5}>{rodapePaginacao(cat)}</td>
+                      <td colSpan={7}>{rodapePaginacao(cat)}</td>
                     </tr>,
                   ] : []),
                 ])}
@@ -642,7 +683,7 @@ export default function Dashboard({ darkMode, setDarkMode }) {
     const layoutAtual = LAYOUTS.find(l => l.id === layoutProdutos);
 
     return (
-      <div className="flex flex-col gap-4 w-full lg:w-1/2" style={{ marginInline: 'auto' }}>
+      <div className={`flex flex-col gap-4 flex-1 ${TABLE_WRAP}`}>
         {/* Toolbar */}
         <div className="flex items-center gap-2 flex-wrap">
           {/* Search */}
@@ -740,89 +781,11 @@ export default function Dashboard({ darkMode, setDarkMode }) {
     );
   }
 
-  function renderCategorias() {
-    const filtered = products.filter(p =>
-      p.nome.toLowerCase().includes(search.toLowerCase().trim())
-    );
-    const grouped = filtered.reduce((acc, p) => {
-      const cat = p.categoria || 'Sem Categoria';
-      if (!acc[cat]) acc[cat] = [];
-      acc[cat].push(p);
-      return acc;
-    }, {});
-    const categorias = Object.keys(grouped).sort((a, b) =>
-      a === 'Sem Categoria' ? 1 : b === 'Sem Categoria' ? -1 : a.localeCompare(b)
-    );
-
-    return (
-      <div className="flex flex-col gap-4">
-        <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 px-4 py-3 flex items-center gap-3">
-          <span className="text-gray-400 text-lg">🔍</span>
-          <input
-            className="flex-1 text-sm bg-transparent outline-none text-gray-800 dark:text-gray-100 placeholder:text-gray-400"
-            placeholder="Buscar produto por nome…"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            autoFocus
-          />
-          {search && (
-            <button onClick={() => setSearch('')} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xs transition">✕</button>
-          )}
-        </div>
-
-        {loadingProducts ? (
-          <div className="flex flex-col items-center justify-center py-24 text-gray-400 dark:text-gray-600">
-            <span className="text-4xl mb-3 animate-pulse">🗂️</span>
-            <p className="text-sm">Carregando…</p>
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-24 text-gray-400 dark:text-gray-600">
-            <span className="text-4xl mb-3">🔍</span>
-            <p className="text-sm">Nenhum produto encontrado{search ? ` para "${search}"` : ''}.</p>
-          </div>
-        ) : (
-          categorias.map(cat => (
-            <div key={cat} className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
-              <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800 flex items-center gap-2">
-                <span className="text-base">🗂️</span>
-                <h3 className="font-semibold text-sm text-gray-800 dark:text-white">{cat}</h3>
-                <span className="ml-auto text-xs text-gray-400 dark:text-gray-500">{grouped[cat].length} produto{grouped[cat].length !== 1 ? 's' : ''}</span>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-left text-xs text-gray-400 dark:text-gray-500 border-b border-gray-100 dark:border-gray-800">
-                      <th className="px-4 py-2.5 font-medium">Nome</th>
-                      <th className="px-4 py-2.5 font-medium whitespace-nowrap">Quantidade</th>
-                      <th className="px-4 py-2.5 font-medium whitespace-nowrap">Unidade</th>
-                      <th className="px-4 py-2.5 font-medium whitespace-nowrap">Fornecedor</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
-                    {grouped[cat].map(p => (
-                      <tr key={p.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                        <td className="px-4 py-2.5 font-medium text-gray-800 dark:text-gray-200">{p.nome}</td>
-                        <td className="px-4 py-2.5 whitespace-nowrap">
-                          <span className={parseFloat(p.quantidade) === 0 ? 'text-red-500 font-semibold' : parseFloat(p.quantidade) <= LOW_STOCK_THRESHOLD ? 'text-yellow-500 font-semibold' : 'text-gray-600 dark:text-gray-400'}>{parseFloat(p.quantidade)}</span>
-                        </td>
-                        <td className="px-4 py-2.5 whitespace-nowrap text-gray-600 dark:text-gray-400">{p.unidade}</td>
-                        <td className="px-4 py-2.5 whitespace-nowrap text-gray-500 dark:text-gray-500">{p.fornecedor || '—'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          ))
-        )}
-      </div>
-    );
-  }
-
   function renderEquipe() {
+    const pagEquipe = paginate(sortRows(users, ordem.equipe), pagTabelas.equipe, linhasPorPagina);
     return (
       <>
-        <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
+        <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 flex-1 min-h-0 flex flex-col">
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-800">
             <h2 className="font-semibold text-gray-800 dark:text-white text-sm">Membros da equipe</h2>
             <button
@@ -839,49 +802,49 @@ export default function Dashboard({ darkMode, setDarkMode }) {
               <p className="text-sm">Carregando…</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+            <div ref={areaTabelaRef} className="overflow-x-auto overflow-y-hidden flex-1 min-h-0">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-left text-xs text-gray-400 dark:text-gray-500 border-b border-gray-100 dark:border-gray-800">
-                    <th className="px-4 py-3 font-medium">Nome</th>
-                    <th className="px-4 py-3 font-medium">E-mail</th>
-                    <th className="px-4 py-3 font-medium">Cargo</th>
-                    <th className="px-4 py-3 font-medium">Status</th>
+                    <SortTh k="nome" ordem={ordem.equipe} onSort={k => alternarOrdem('equipe', k)} className="px-4 py-3 font-medium">Nome</SortTh>
+                    <SortTh k="email" ordem={ordem.equipe} onSort={k => alternarOrdem('equipe', k)} className="px-4 py-3 font-medium">E-mail</SortTh>
+                    <SortTh k="role" ordem={ordem.equipe} onSort={k => alternarOrdem('equipe', k)} className="px-4 py-3 font-medium hide-lt-850">Cargo</SortTh>
+                    <SortTh k="ativo" ordem={ordem.equipe} onSort={k => alternarOrdem('equipe', k)} className="px-4 py-3 font-medium hide-lt-1100">Status</SortTh>
                     <th className="px-4 py-3 font-medium">Ações</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
-                  {users.map(u => (
-                    <tr key={u.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                      <td className="px-4 py-3 font-medium text-gray-800 dark:text-gray-200">
+                  {pagEquipe.items.map((u, i) => (
+                    <tr key={u.id} className={zebra(i)}>
+                      <td className="px-4 py-1.5 font-medium text-gray-800 dark:text-gray-200">
                         {u.nome}
                         {u.id === user?.id && <span className="ml-1.5 text-xs text-gray-400">(você)</span>}
                       </td>
-                      <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{u.email}</td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-medium
-                          ${u.role === 'admin'
-                            ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400'
-                            : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
-                          }`}
-                        >
-                          {u.role === 'admin' ? 'Admin' : 'Operador'}
+                      <td className="px-4 py-1.5 whitespace-nowrap break-anywhere text-gray-500 dark:text-gray-400">{u.email}</td>
+                      <td className="px-4 py-1.5 hide-lt-850">
+                        <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-medium ${corCargo(u.role)}`}>
+                          {ROLES[u.role] || u.role}
                         </span>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-1.5 hide-lt-1100">
                         <span className={`text-xs font-medium ${u.ativo ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}`}>
                           {u.ativo ? 'Ativo' : 'Inativo'}
                         </span>
                       </td>
-                      <td className="px-4 py-3">
-                        {u.id !== user?.id ? (
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => handleToggleRole(u)}
-                              className="px-4 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition whitespace-nowrap"
+                      <td className="px-4 py-1.5">
+                        {u.id !== user?.id && podeGerenciar(user?.role, u.role) ? (
+                          <div className="flex flex-wrap gap-2">
+                            <select
+                              value={u.role}
+                              onChange={e => handleChangeRole(u, e.target.value)}
+                              title="Alterar cargo"
+                              className="px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-300 outline-none focus:border-purple-500"
                             >
-                              {u.role === 'admin' ? 'Tornar Operador' : 'Tornar Admin'}
-                            </button>
+                              {cargosAtribuiveis(user?.role).map(c => (
+                                <option key={c} value={c}>{ROLES[c]}</option>
+                              ))}
+                            </select>
                             <button
                               onClick={() => handleToggleStatus(u)}
                               className={`px-4 py-2 text-sm rounded-lg border transition whitespace-nowrap
@@ -908,179 +871,56 @@ export default function Dashboard({ darkMode, setDarkMode }) {
                 </tbody>
               </table>
             </div>
+            <Pagination page={pagEquipe.page} totalPages={pagEquipe.totalPages} onChange={n => setPagTabelas(s => ({ ...s, equipe: n }))} className="shrink-0 border-t border-gray-100 dark:border-gray-800" />
+            </>
           )}
         </div>
       </>
     );
   }
 
-  // ─── Active nav label ────────────────────────────────────────────
-  const activeLabel = ALL_NAV_ITEMS.find(i => i.id === activeNav)?.label || 'Dashboard';
-
-  // ─── Sidebar hover trigger zone (16px strip on the left edge) ───
   return (
     <div className="h-screen flex overflow-hidden bg-gradient-to-br from-white via-white to-[#E879F9]/30 dark:from-black dark:via-[#2e1065] dark:to-[#7C3AED] transition-colors duration-500 relative">
-
-      {/* Sidebar — slides in from the left */}
-      <aside
-        ref={sidebarRef}
-        onMouseLeave={() => { setSidebarVisible(false); setShowProfileMenu(false); setEditingName(false); }}
-        className={`fixed left-0 top-0 h-full z-50 flex flex-col bg-white dark:bg-gray-900 shadow-2xl border-r border-gray-100 dark:border-gray-800 transition-transform duration-300 w-56
-          ${sidebarVisible ? 'translate-x-0' : '-translate-x-full'}`}
-      >
-        {/* Logo */}
-        <div className="flex items-center gap-3 px-4 py-5 border-b border-gray-100 dark:border-gray-800">
-          <img src="/logo.png" alt="logo" className="w-8 h-8 shrink-0 mix-blend-multiply dark:mix-blend-screen" />
-          <span className="font-bold text-gray-800 dark:text-white text-sm tracking-tight">StockFlow</span>
-        </div>
-
-        {/* Navigation */}
-        <nav className="flex flex-col gap-1 p-3 flex-1">
-          {navItems.map(item => (
-            <button
-              key={item.id}
-              onClick={() => { setActiveNav(item.id); setSidebarVisible(false); }}
-              className={`flex items-center gap-3 px-4 py-3 rounded-xl text-base font-medium transition-all text-left
-                ${activeNav === item.id
-                  ? 'bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300'
-                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
-                }`}
-            >
-              <span className="text-lg shrink-0">{item.icon}</span>
-              <span className="whitespace-nowrap">{item.label}</span>
-            </button>
-          ))}
-        </nav>
-
-        {/* Social links */}
-        <div className="flex items-center gap-2 px-4 py-3 border-t border-gray-100 dark:border-gray-800">
-          <a href="https://github.com/Pansera13/TCC" target="_blank" rel="noreferrer"
-            className="flex items-center gap-2 flex-1 px-3 py-2 rounded-xl text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition text-xs font-medium">
-            <svg viewBox="0 0 24 24" className="w-4 h-4 shrink-0 fill-current">
-              <path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.438 9.8 8.205 11.387.6.113.82-.258.82-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.84 1.237 1.84 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.468-2.381 1.235-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.3 1.23a11.52 11.52 0 0 1 3.003-.404c1.02.005 2.047.138 3.006.404 2.29-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.61-2.807 5.625-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .322.218.694.825.576C20.565 21.796 24 17.298 24 12 24 5.37 18.627 0 12 0z"/>
-            </svg>
-            GitHub
-          </a>
-          <a href="https://www.linkedin.com/in/lucas-pansera-a80b92320/" target="_blank" rel="noreferrer"
-            className="flex items-center gap-2 flex-1 px-3 py-2 rounded-xl text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition text-xs font-medium">
-            <svg viewBox="0 0 24 24" className="w-4 h-4 shrink-0 fill-current">
-              <path d="M20.447 20.452H17.21v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.987V9h3.102v1.561h.046c.432-.818 1.489-1.681 3.065-1.681 3.276 0 3.881 2.155 3.881 4.959v6.613zM5.337 7.433a1.8 1.8 0 1 1 0-3.601 1.8 1.8 0 0 1 0 3.601zM6.891 20.452H3.78V9h3.111v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
-            </svg>
-            LinkedIn
-          </a>
-        </div>
-
-        {/* Profile area */}
-        <div className="px-3 pb-4" ref={profileRef}>
-          <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
-          <button
-            onClick={() => { setShowProfileMenu(v => !v); setEditingName(false); }}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition text-left"
-          >
-            <div className="w-8 h-8 rounded-full bg-purple-600 overflow-hidden shrink-0 flex items-center justify-center">
-              {user?.avatarUrl
-                ? <img src={user.avatarUrl} alt="avatar" className="w-full h-full object-cover" />
-                : <span className="text-white text-sm font-bold">{user?.nome?.[0]?.toUpperCase() || '?'}</span>
-              }
-            </div>
-            <div className="min-w-0">
-              <p className="text-sm font-medium text-gray-800 dark:text-white truncate">{user?.nome}</p>
-              <p className="text-xs text-gray-400">{isAdmin ? 'Admin' : 'Operador'}</p>
-            </div>
-          </button>
-
-          {showProfileMenu && (
-            <div className="mt-1 bg-white dark:bg-gray-800 rounded-xl border border-gray-100 dark:border-gray-700 shadow-lg overflow-hidden">
-              {editingName ? (
-                <div className="px-3 py-2 flex flex-col gap-2">
-                  <input
-                    autoFocus
-                    className="w-full px-2 py-1.5 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-800 dark:text-white outline-none focus:border-purple-500"
-                    value={newName}
-                    onChange={e => setNewName(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') handleSaveName(); if (e.key === 'Escape') setEditingName(false); }}
-                    placeholder="Novo nome"
-                  />
-                  <div className="flex gap-1">
-                    <button onClick={() => setEditingName(false)} className="flex-1 py-1 text-xs rounded-lg border border-gray-200 dark:border-gray-700 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 transition">Cancelar</button>
-                    <button onClick={handleSaveName} className="flex-1 py-1 text-xs rounded-lg bg-purple-600 hover:bg-purple-700 text-white transition">Salvar</button>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <button
-                    onClick={() => photoInputRef.current?.click()}
-                    className="w-full flex items-center gap-3 px-4 py-3 text-base text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition text-left"
-                  >
-                    📷 Alterar foto
-                  </button>
-                  <button
-                    onClick={() => { setNewName(user?.nome || ''); setEditingName(true); }}
-                    className="w-full flex items-center gap-3 px-4 py-3 text-base text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition text-left"
-                  >
-                    ✏️ Alterar nome
-                  </button>
-                  <div className="border-t border-gray-100 dark:border-gray-700" />
-                  <button
-                    onClick={logoutUser}
-                    className="w-full flex items-center gap-3 px-4 py-3 text-base text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition text-left"
-                  >
-                    🚪 Sair da conta
-                  </button>
-                </>
-              )}
-            </div>
-          )}
-        </div>
-      </aside>
-
-      {/* Backdrop when sidebar is open — clique fora para fechar */}
-      {sidebarVisible && (
-        <div
-          className="fixed inset-0 z-40 bg-black/20"
-          onClick={() => { setSidebarVisible(false); setShowProfileMenu(false); setEditingName(false); }}
-        />
-      )}
 
       {/* Main area */}
       <div className="flex flex-col flex-1 min-w-0">
 
-        {/* Header */}
-        <header className="flex items-center justify-between px-4 py-3 bg-white dark:bg-gray-900 shadow-sm border-b border-gray-100 dark:border-gray-800">
-          <div className="flex items-center gap-3 min-w-0">
-            {/* Hamburger trigger */}
-            <button
-              onClick={() => setSidebarVisible(v => !v)}
-              className="p-2 rounded-lg text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition text-lg shrink-0"
-              title="Menu"
-            >
-              ☰
-            </button>
-            <div className="min-w-0">
-              <h1 className="text-lg font-bold text-gray-800 dark:text-white truncate">{activeLabel}</h1>
-              <p className="text-xs text-gray-400 dark:text-gray-500 truncate">Bem-vindo, {user?.nome}</p>
-            </div>
-          </div>
-          <div className="flex items-center shrink-0" style={{ marginRight: '1.5cm' }}>
-            <ThemeToggle isDark={darkMode} onToggle={() => setDarkMode(d => !d)} />
-          </div>
-        </header>
+        <TopNav
+          items={navItems}
+          activeNav={activeNav}
+          onSelect={setActiveNav}
+          user={user}
+          isAdmin={isAdmin}
+          darkMode={darkMode}
+          onToggleDark={() => setDarkMode(dm => !dm)}
+          profileRef={profileRef}
+          photoInputRef={photoInputRef}
+          onPhotoChange={handlePhotoChange}
+          showProfileMenu={showProfileMenu}
+          setShowProfileMenu={setShowProfileMenu}
+          editingName={editingName}
+          setEditingName={setEditingName}
+          newName={newName}
+          setNewName={setNewName}
+          onSaveName={handleSaveName}
+          onLogout={logoutUser}
+        />
 
-        <main className="flex-1 overflow-auto px-3 sm:px-[3cm] pt-4 sm:pt-6 pb-4 sm:pb-6">
-          <div className="flex flex-col gap-4">
+        <main className="flex-1 overflow-auto px-3 sm:px-[3cm] pt-4 sm:pt-6 pb-[1cm]">
+          <div className={`flex flex-col gap-4 ${['dashboard', 'sem-estoque', 'equipe', 'movimentacoes'].includes(activeNav) ? 'h-full' : 'min-h-full'}`}>
             {activeNav === 'dashboard'     && renderInicio()}
             {activeNav === 'produtos'      && renderProdutos()}
-            {activeNav === 'categorias'    && <div className="w-full lg:w-1/2" style={{ marginInline: 'auto' }}>{renderCategorias()}</div>}
             {activeNav === 'movimentacoes' && (
-              <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 w-full lg:w-1/2" style={{ marginInline: 'auto' }}>
+              <div className={`bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 flex-1 min-h-0 flex flex-col ${TABLE_WRAP}`}>
                 <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800">
                   <h2 className="font-semibold text-gray-800 dark:text-white text-sm">Histórico de Movimentações</h2>
                 </div>
                 <MovementsHistory />
               </div>
             )}
-            {activeNav === 'sem-estoque' && <div className="w-full lg:w-1/2" style={{ marginInline: 'auto' }}>{renderSemEstoque()}</div>}
-            {activeNav === 'equipe' && isAdmin && <div className="w-full lg:w-1/2" style={{ marginInline: 'auto' }}>{renderEquipe()}</div>}
+            {activeNav === 'relatorios' && <Reports />}
+            {activeNav === 'sem-estoque' && <div className={`${TABLE_WRAP} flex-1 min-h-0 flex flex-col`}>{renderSemEstoque()}</div>}
+            {activeNav === 'equipe' && isAdmin && <div className={`${TABLE_WRAP} flex-1 min-h-0 flex flex-col`}>{renderEquipe()}</div>}
           </div>
         </main>
       </div>
@@ -1116,6 +956,7 @@ export default function Dashboard({ darkMode, setDarkMode }) {
         <AddUserModal
           onClose={() => setShowAddUser(false)}
           onUserAdded={fetchUsers}
+          cargos={cargosAtribuiveis(user?.role)}
         />
       )}
     </div>

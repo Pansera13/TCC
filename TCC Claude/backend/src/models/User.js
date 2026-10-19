@@ -11,7 +11,7 @@ async function findByIdentifier(value) {
   const field = detectIdentifierType(value);
   if (field === 'email') {
     const { rows } = await db.query(
-      `SELECT * FROM usuarios WHERE LOWER(email) = LOWER($1) AND ativo = TRUE`,
+      `SELECT * FROM usuarios WHERE LOWER(email) = LOWER($1)`,
       [value.trim()]
     );
     return rows[0] || null;
@@ -19,13 +19,13 @@ async function findByIdentifier(value) {
   if (field === 'cpf_cnpj') {
     const digits = value.replace(/\D/g, '');
     const { rows } = await db.query(
-      `SELECT * FROM usuarios WHERE REGEXP_REPLACE(cpf_cnpj, '[^0-9]', '', 'g') = $1 AND ativo = TRUE`,
+      `SELECT * FROM usuarios WHERE REGEXP_REPLACE(cpf_cnpj, '[^0-9]', '', 'g') = $1`,
       [digits]
     );
     return rows[0] || null;
   }
   const { rows } = await db.query(
-    `SELECT * FROM usuarios WHERE LOWER(nome_empresa) = LOWER($1) AND ativo = TRUE`,
+    `SELECT * FROM usuarios WHERE LOWER(nome_empresa) = LOWER($1)`,
     [value.trim()]
   );
   return rows[0] || null;

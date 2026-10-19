@@ -1,8 +1,10 @@
 import { Fragment, useEffect, useState } from 'react';
 import { listMovements, listMovementUsers } from '../services/api';
 import Pagination from './Pagination';
+import { zebra } from '../utils/tables';
+import { useFitRows } from '../utils/useFitRows';
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE_INICIAL = 8;
 const FILTROS_VAZIOS = { user: '', tipo: '', q: '', from: '', to: '' };
 
 const ACOES = {
@@ -36,10 +38,12 @@ export default function MovementsHistory() {
   const [usuarios, setUsuarios] = useState([]);
   const [aberto, setAberto] = useState(null);
   const [recarregar, setRecarregar] = useState(0);
+  // Linhas por página = quantas cabem na altura disponível (sem rolagem vertical)
+  const [areaRef, pageSize] = useFitRows(PAGE_SIZE_INICIAL);
   const periodoInvalido = !!(filtros.from && filtros.to && filtros.from > filtros.to);
 
   // Identifica a consulta pedida; "carregando" = a resposta guardada ainda é de outra consulta
-  const key = JSON.stringify([filtros, page, recarregar]);
+  const key = JSON.stringify([filtros, page, recarregar, pageSize]);
   const loading = !periodoInvalido && resp.key !== key;
   const { dados, erro } = resp;
 
@@ -61,7 +65,7 @@ export default function MovementsHistory() {
   useEffect(() => {
     if (periodoInvalido) return;
     let cancelado = false;
-    const params = { page, pageSize: PAGE_SIZE };
+    const params = { page, pageSize };
     for (const [k, v] of Object.entries(filtros)) if (v) params[k] = v;
 
     listMovements(params)
@@ -70,7 +74,7 @@ export default function MovementsHistory() {
         if (!cancelado) setResp(r => ({ ...r, key, erro: err.response?.data?.message || 'Não foi possível carregar o histórico.' }));
       });
     return () => { cancelado = true; };
-  }, [key, filtros, page, periodoInvalido]);
+  }, [key, filtros, page, pageSize, periodoInvalido]);
 
   function mudarFiltro(campo, v) {
     setFiltros(f => ({ ...f, [campo]: v }));
@@ -86,10 +90,10 @@ export default function MovementsHistory() {
   }
 
   const temFiltro = Object.values(filtros).some(Boolean) || busca !== '';
-  const totalPages = Math.max(1, Math.ceil(dados.total / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(dados.total / pageSize));
 
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col flex-1 min-h-0">
       {/* Filtros */}
       <div className="p-4 border-b border-gray-100 dark:border-gray-800 grid grid-cols-2 lg:grid-cols-6 gap-2">
         <select className={inputCls} value={filtros.user} onChange={e => mudarFiltro('user', e.target.value)} aria-label="Usuário">
@@ -139,7 +143,7 @@ export default function MovementsHistory() {
           </p>
         </div>
       ) : (
-        <div className={`overflow-x-auto transition-opacity ${loading ? 'opacity-60' : ''}`}>
+        <div ref={areaRef} className={`overflow-x-auto ${aberto ? 'overflow-y-auto' : 'overflow-y-hidden'} flex-1 min-h-0`}>
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs text-gray-400 dark:text-gray-500 border-b border-gray-100 dark:border-gray-800">
@@ -147,20 +151,20 @@ export default function MovementsHistory() {
                 <th className="px-4 py-3 font-medium">Produto</th>
                 <th className="px-4 py-3 font-medium">Ação</th>
                 <th className="px-4 py-3 font-medium">Quantidade</th>
-                <th className="px-4 py-3 font-medium">Origem</th>
-                <th className="px-4 py-3 font-medium">Responsável</th>
+                <th className="px-4 py-3 font-medium hide-lt-850">Origem</th>
+                <th className="px-4 py-3 font-medium hide-lt-1100">Responsável</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
-              {dados.items.map(m => {
+              {dados.items.map((m, i) => {
                 const acao = ACOES[m.tipo] || { ...ACAO_DESCONHECIDA, label: m.tipo };
                 const campos = m.tipo === 'edicao' && m.detalhes ? Object.keys(m.detalhes.depois || {}) : [];
                 return (
                   <Fragment key={m.id}>
-                    <tr className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                      <td className="px-4 py-3 text-gray-500 dark:text-gray-400 whitespace-nowrap">{formatDate(m.created_at)}</td>
-                      <td className="px-4 py-3 font-medium text-gray-800 dark:text-gray-200">{m.product_nome}</td>
-                      <td className="px-4 py-3 whitespace-nowrap">
+                    <tr className={zebra(i)}>
+                      <td className="px-4 py-1.5 text-gray-500 dark:text-gray-400 whitespace-nowrap">{formatDate(m.created_at)}</td>
+                      <td className="px-4 py-1.5 font-medium whitespace-normal sm:whitespace-nowrap text-gray-800 dark:text-gray-200" title={m.product_nome}>{m.product_nome}</td>
+                      <td className="px-4 py-1.5 whitespace-nowrap">
                         <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium ${acao.cls}`}>{acao.label}</span>
                         {campos.length > 0 && (
                           <button type="button" onClick={() => setAberto(aberto === m.id ? null : m.id)}
@@ -169,10 +173,10 @@ export default function MovementsHistory() {
                           </button>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-gray-600 dark:text-gray-400">
+                      <td className="px-4 py-1.5 text-gray-600 dark:text-gray-400">
                         {m.tipo === 'edicao' && Number(m.quantidade) === 0 ? '—' : m.quantidade}
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-1.5 hide-lt-850">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium
                           ${m.origem === 'pedido'
                             ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400'
@@ -180,7 +184,7 @@ export default function MovementsHistory() {
                           {m.origem === 'pedido' ? 'Pedido' : 'Estoque'}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-gray-600 dark:text-gray-400">
+                      <td className="px-4 py-1.5 text-gray-600 dark:text-gray-400 hide-lt-1100">
                         {m.origem === 'pedido' ? 'Sistema de Pedidos' : (m.user_nome || '—')}
                       </td>
                     </tr>
@@ -209,7 +213,7 @@ export default function MovementsHistory() {
       )}
 
       {dados.total > 0 && (
-        <div className="flex flex-col items-center border-t border-gray-100 dark:border-gray-800">
+        <div className="shrink-0 flex flex-col items-center border-t border-gray-100 dark:border-gray-800">
           <Pagination page={page} totalPages={totalPages} onChange={n => { setPage(n); setAberto(null); }} />
           <p className="pb-3 text-xs text-gray-400 dark:text-gray-500">{dados.total} registro{dados.total !== 1 ? 's' : ''}</p>
         </div>

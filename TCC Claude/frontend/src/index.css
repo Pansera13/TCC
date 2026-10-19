@@ -6,25 +6,24 @@
   50% { transform: translateY(-8px); }
 }
 
-/* Botões GitHub/LinkedIn somem e perdem a caixa de colisão quando o sidebar abre */
-.social-links {
-  transition: opacity 0.2s;
-}
-html[data-sidebar-open] .social-links {
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
-}
-
 .animate-float {
   animation: float 3s ease-in-out infinite;
 }
 
 
+/* margin/padding já são zerados pelo preflight do Tailwind (em @layer base).
+   Um reset fora das camadas aqui anulava todos os utilitários (mx-auto, p-5, px-4...). */
 * {
   box-sizing: border-box;
-  margin: 0;
-  padding: 0;
+}
+
+/* Esconde todas as barras de rolagem; o conteúdo continua rolando com roda do mouse, toque e teclado. */
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+*::-webkit-scrollbar {
+  display: none;
 }
 
 body {
@@ -129,3 +128,19 @@ body {
   background: radial-gradient(circle, rgba(163, 187, 255, 0.8), transparent 72%);
   opacity: 1;
 }
+
+/* Colunas secundárias das tabelas: somem em telas estreitas para a tabela nunca passar da tela */
+@media (max-width: 1349px) { .hide-lt-1350 { display: none; } }
+@media (max-width: 1099px) { .hide-lt-1100 { display: none; } }
+@media (max-width: 849px)  { .hide-lt-850  { display: none; } }
+
+/* Telas médias e pequenas: o texto quebra nos espaços e, em telas bem pequenas, o espaçamento lateral
+   das células diminui, assim a tabela nunca vaza da tela */
+@media (max-width: 1279px) {
+  main table th, main table td, main table td button { white-space: normal; overflow-wrap: break-word; }
+}
+@media (max-width: 639px) {
+  main table th, main table td { padding-inline: 0.5rem; }
+}
+
+.break-anywhere { overflow-wrap: anywhere; }

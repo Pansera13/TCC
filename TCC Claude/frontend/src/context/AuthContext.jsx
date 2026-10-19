@@ -2,28 +2,33 @@ import { createContext, useContext, useState } from 'react';
 
 const AuthContext = createContext(null);
 
+// A sessão fica no sessionStorage: cada aba tem o seu próprio login, então dá para usar
+// contas diferentes no mesmo navegador (fechar a aba encerra a sessão dela).
+// Remove restos da sessão antiga, que ficava compartilhada entre abas no localStorage.
+try { localStorage.removeItem('token'); localStorage.removeItem('user'); } catch { /* sem acesso ao localStorage */ }
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
-    const stored = localStorage.getItem('user');
+    const stored = sessionStorage.getItem('user');
     return stored ? JSON.parse(stored) : null;
   });
 
   function loginUser(token, nome, role, id, avatar_url) {
     const userData = { nome, role: role || 'admin', id, avatarUrl: avatar_url || null };
-    localStorage.setItem('token', token);
-    localStorage.setItem('user', JSON.stringify(userData));
+    sessionStorage.setItem('token', token);
+    sessionStorage.setItem('user', JSON.stringify(userData));
     setUser(userData);
   }
 
   function logoutUser() {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    sessionStorage.removeItem('token');
+    sessionStorage.removeItem('user');
     setUser(null);
   }
 
   function updateUser(fields) {
     const updated = { ...user, ...fields };
-    localStorage.setItem('user', JSON.stringify(updated));
+    sessionStorage.setItem('user', JSON.stringify(updated));
     setUser(updated);
   }
 

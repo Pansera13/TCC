@@ -5,6 +5,7 @@ const authRoutes = require('./routes/auth');
 const productRoutes = require('./routes/products');
 const nfeRoutes = require('./routes/nfe');
 const movementRoutes = require('./routes/movements');
+const reportRoutes = require('./routes/reports');
 const userRoutes = require('./routes/users');
 const profileRoutes = require('./routes/profile');
 
@@ -19,6 +20,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/nfe', nfeRoutes);
 app.use('/api/movements', movementRoutes);
+app.use('/api/reports', reportRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/profile', profileRoutes);
 
