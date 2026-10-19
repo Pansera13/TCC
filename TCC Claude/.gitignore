@@ -1,2 +1,8 @@
 node_modules/
 dist/
+
+# Variáveis de ambiente — NUNCA commitar
+.env
+.env.local
+.env.*.local
+# (arquivos .env.example* são mantidos no git propositalmente)

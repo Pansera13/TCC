@@ -51,7 +51,8 @@ async function listMovements(req, res) {
     return res.status(400).json({ message: 'A data final deve ser igual ou posterior à data inicial.' });
   }
 
-  const filtro = where.length ? `WHERE ${where.join(' AND ')}` : '';
+  where.push(`tenant_id = ${add(req.user.tenant_id)}`);
+  const filtro = `WHERE ${where.join(' AND ')}`;
 
   const { rows: contagem } = await db.query(`SELECT COUNT(*)::int AS total FROM movements ${filtro}`, params);
   const total = contagem[0].total;
@@ -70,7 +71,8 @@ async function listMovements(req, res) {
 // GET /api/movements/users — nomes de quem já agiu no estoque (opções do filtro; /api/users é só admin)
 async function listMovementUsers(req, res) {
   const { rows } = await db.query(
-    `SELECT DISTINCT user_nome FROM movements WHERE origem = 'estoque'`
+    `SELECT DISTINCT user_nome FROM movements WHERE origem = 'estoque' AND tenant_id = $1`,
+    [req.user.tenant_id]
   );
   return res.json(rows.map(r => r.user_nome).sort((a, b) => a.localeCompare(b)));
 }

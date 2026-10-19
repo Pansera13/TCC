@@ -40,14 +40,17 @@ async function sendResetEmail(email, code) {
 async function register(req, res) {
   try {
     const { nome, nome_empresa, cpf_cnpj, email, senha, recaptchaToken } = req.body;
+    const recaptchaEnabled = !!process.env.RECAPTCHA_SECRET;
 
-    if (!nome || !nome_empresa || !cpf_cnpj || !email || !senha || !recaptchaToken) {
+    if (!nome || !nome_empresa || !cpf_cnpj || !email || !senha || (recaptchaEnabled && !recaptchaToken)) {
       return res.status(400).json({ message: 'Preencha todos os campos.' });
     }
 
-    const captchaOk = await verifyRecaptcha(recaptchaToken);
-    if (!captchaOk) {
-      return res.status(400).json({ message: 'Verificação de CAPTCHA falhou.' });
+    if (recaptchaEnabled) {
+      const captchaOk = await verifyRecaptcha(recaptchaToken);
+      if (!captchaOk) {
+        return res.status(400).json({ message: 'Verificação de CAPTCHA falhou.' });
+      }
     }
 
     const emailExists = await User.findByEmail(email);
@@ -93,7 +96,7 @@ async function login(req, res) {
     }
 
     const token = jwt.sign(
-      { id: user.id, nome: user.nome, email: user.email, role: user.role || 'admin' },
+      { id: user.id, nome: user.nome, email: user.email, role: user.role || 'admin', tenant_id: user.tenant_id },
       process.env.JWT_SECRET,
       { expiresIn: '8h' }
     );

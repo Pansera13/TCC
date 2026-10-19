@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { Html5Qrcode } from 'html5-qrcode';
+import { Html5Qrcode, Html5QrcodeSupportedFormats as Fmt } from 'html5-qrcode';
 import api from '../services/api';
 
-const INITIAL_FORM = { nome: '', quantidade: '', unidade: 'UN', categoria: '', fornecedor: '' };
+const INITIAL_FORM = { nome: '', quantidade: '', unidade: 'UN', categoria: '', fornecedor: '', codigo_barras: '' };
 const UNIDADES = ['UN', 'CX', 'PCT', 'KG', 'G', 'T', 'L', 'ML', 'M', 'CM'];
 
 function Field({ label, required, children, error }) {
@@ -32,6 +32,13 @@ export default function AddProductModal({ onClose, onProductsAdded, categories =
   const [cameraError, setCameraError] = useState('');
   const [nfeProducts, setNfeProducts] = useState([]);
   const [scanTimeout, setScanTimeout] = useState(null);
+  const [scanMode, setScanMode] = useState('qr'); // 'qr' | 'barcode'
+  const [chaveInput, setChaveInput] = useState('');
+
+  // barcode lookup
+  const [barcodeLoading, setBarcodeLoading] = useState(false);
+  const [barcodeWarning, setBarcodeWarning] = useState('');
+  const [barcodeImagem, setBarcodeImagem] = useState(null);
 
   const scannerRef = useRef(null);
   const scannerInstanceRef = useRef(null);
@@ -49,18 +56,34 @@ export default function AddProductModal({ onClose, onProductsAdded, categories =
       setCameraStep('scanning');
       setCameraError('');
       setNfeProducts([]);
-      startScanner();
+      setScanMode('qr');
+      startScanner('qr');
     }
     return () => {
       stopScanner();
     };
   }, [mode]);
 
-  async function startScanner() {
+  async function switchScanMode(newMode) {
+    setScanMode(newMode);
+    await stopScanner();
+    setCameraError('');
+    startScanner(newMode);
+  }
+
+  async function startScanner(currentScanMode = 'qr') {
     await new Promise(r => setTimeout(r, 100)); // wait for DOM
     if (!scannerRef.current) return;
 
-    const html5Qrcode = new Html5Qrcode('nfe-scanner-region');
+    // Restringir os formatos deixa a leitura muito mais rápida (por padrão ele tenta todos)
+    const formatsToSupport = currentScanMode === 'barcode'
+      ? [Fmt.EAN_13, Fmt.EAN_8, Fmt.UPC_A, Fmt.UPC_E, Fmt.CODE_128, Fmt.ITF]
+      : [Fmt.QR_CODE];
+    const html5Qrcode = new Html5Qrcode('nfe-scanner-region', {
+      formatsToSupport,
+      useBarCodeDetectorIfSupported: true,
+      verbose: false,
+    });
     scannerInstanceRef.current = html5Qrcode;
 
     const timeout = setTimeout(() => {
@@ -70,10 +93,19 @@ export default function AddProductModal({ onClose, onProductsAdded, categories =
     }, 30000);
     setScanTimeout(timeout);
 
+    const qrbox = currentScanMode === 'barcode'
+      ? (w, h) => ({ width: Math.floor(w * 0.88), height: Math.floor(h * 0.28) })
+      : (w, h) => { const s = Math.floor(Math.min(w, h) * 0.72); return { width: s, height: s }; };
+
     try {
       await html5Qrcode.start(
-        { facingMode: 'environment' },
-        { fps: 10, qrbox: { width: 250, height: 250 } },
+        { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 }, advanced: [{ focusMode: 'continuous' }] },
+        {
+          fps: 20,
+          qrbox,
+          disableFlip: true,
+          rememberLastUsedCamera: false,
+        },
         async (decodedText) => {
           clearTimeout(timeout);
           await stopScanner();
@@ -84,10 +116,13 @@ export default function AddProductModal({ onClose, onProductsAdded, categories =
     } catch (err) {
       clearTimeout(timeout);
       setCameraStep('error');
-      if (err.toString().includes('Permission')) {
-        setCameraError('Permissão de câmera negada. A câmera é necessária para esta função.');
+      const msg = err.toString();
+      if (msg.includes('Permission')) {
+        setCameraError('Permissão de câmera negada. Permita o acesso à câmera nas configurações do navegador.');
+      } else if (msg.includes('streaming not supported') || msg.includes('mediaDevices') || location.protocol !== 'https:') {
+        setCameraError('A câmera requer HTTPS. Acesse o sistema via https:// (não http://).');
       } else {
-        setCameraError('Não foi possível acessar a câmera: ' + err.toString());
+        setCameraError('Não foi possível acessar a câmera: ' + msg);
       }
     }
   }
@@ -107,18 +142,65 @@ export default function AddProductModal({ onClose, onProductsAdded, categories =
   async function handleScanResult(raw) {
     setLoading(true);
     try {
-      // Extract 44-digit access key from raw value (URL or plain key)
-      const match = raw.match(/\d{44}/);
-      const chave = match ? match[0] : raw;
-      const { data } = await api.get(`/api/nfe/${encodeURIComponent(chave)}`);
-      setNfeProducts(data.produtos);
-      setCameraStep('confirm');
+      const match44 = raw.match(/\d{44}/);
+
+      if (match44) {
+        // NF-e: chave de acesso com 44 dígitos
+        const { data } = await api.get(`/api/nfe/${encodeURIComponent(match44[0])}`);
+        setNfeProducts(data.produtos);
+        setCameraStep('confirm');
+        return;
+      }
+
+      // EAN-8, EAN-12, EAN-13, EAN-14 — busca dados do produto via API
+      const ean = raw.replace(/\D/g, '');
+      if (ean.length >= 8 && ean.length <= 14) {
+        setForm(f => ({ ...f, codigo_barras: ean }));
+        setBarcodeWarning('');
+        setBarcodeImagem(null);
+        setMode('manual');
+        lookupByBarcode(ean); // atualiza o form em background
+        return;
+      }
+
+      // Código não reconhecido
+      setCameraStep('error');
+      setCameraError(
+        `Código lido: "${raw}"\n\nUse o modo QR Code para escanear o QR da NF-e, ou Código de Barras para escanear o EAN do produto.`
+      );
     } catch (err) {
       setCameraStep('error');
-      const msg = err.response?.data?.message || err.message || 'Erro ao consultar a NF-e.';
-      setCameraError(msg);
+      setCameraError(err.response?.data?.message || err.message || 'Erro ao consultar a NF-e.');
     } finally {
       setLoading(false);
+    }
+  }
+
+  // ─── Barcode lookup ────────────────────────────────────────────
+  async function lookupByBarcode(codigo) {
+    setBarcodeLoading(true);
+    setBarcodeWarning('');
+    setBarcodeImagem(null);
+    try {
+      const { data } = await api.get(`/api/products/barcode/${encodeURIComponent(codigo)}`);
+      setForm(f => ({
+        ...f,
+        nome: data.nome || f.nome,
+        categoria: data.categoria || f.categoria,
+        fornecedor: data.marca || f.fornecedor,
+      }));
+      if (data.imagem) setBarcodeImagem(data.imagem);
+      if (data.jaCadastrado) {
+        setBarcodeWarning(`⚠️ Este produto já está no seu estoque (${data.produtoExistente?.nome || ''}).`);
+      }
+    } catch (err) {
+      if (err.response?.status === 404) {
+        setBarcodeWarning('Produto não encontrado nas bases de dados. Preencha manualmente.');
+      } else {
+        setBarcodeWarning(err.response?.data?.message || 'Não foi possível buscar o produto. Preencha manualmente.');
+      }
+    } finally {
+      setBarcodeLoading(false);
     }
   }
 
@@ -145,6 +227,7 @@ export default function AddProductModal({ onClose, onProductsAdded, categories =
         unidade: form.unidade,
         categoria: form.categoria.trim() || null,
         fornecedor: form.fornecedor.trim() || null,
+        codigo_barras: form.codigo_barras.trim() || null,
       });
       onProductsAdded();
       onClose();
@@ -202,13 +285,83 @@ export default function AddProductModal({ onClose, onProductsAdded, categories =
             <span className="font-semibold text-sm text-gray-700 dark:text-gray-200 group-hover:text-purple-700 dark:group-hover:text-purple-300">Câmera</span>
             <span className="text-xs text-gray-400 text-center">Escaneie o código de barras ou QR code da NF-e</span>
           </button>
+          <button
+            onClick={() => { setChaveInput(''); setMode('chave'); }}
+            className="col-span-2 flex flex-col items-center gap-2 py-4 px-5 rounded-xl border-2 border-gray-200 dark:border-gray-700 hover:border-purple-500 dark:hover:border-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition group"
+          >
+            <span className="text-3xl">🔑</span>
+            <span className="font-semibold text-sm text-gray-700 dark:text-gray-200 group-hover:text-purple-700 dark:group-hover:text-purple-300">Digitar chave de acesso</span>
+            <span className="text-xs text-gray-400 text-center">Cole ou digite a chave de acesso da NF-e (44 dígitos)</span>
+          </button>
         </div>
       </div>
     );
   }
 
+  // ─── Chave de acesso manual ────────────────────────────────────
+  function renderChave() {
+    const digits = chaveInput.replace(/\D/g, '');
+    const isEan = digits.length >= 8 && digits.length <= 14;
+    const ready = digits.length === 44 || isEan;
+
+    async function handleConsultar(e) {
+      e.preventDefault();
+      setCameraStep('scanning');
+      setCameraError('');
+      await handleScanResult(digits);
+    }
+
+    return (
+      <form onSubmit={handleConsultar} className="flex flex-col gap-4 py-2">
+        <p className="text-xs text-gray-500 dark:text-gray-400">
+          Digite o código de barras do produto (8 a 14 dígitos) ou os 44 dígitos da chave de acesso da NF-e.
+        </p>
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-medium text-gray-600 dark:text-gray-400">
+            Chave de acesso <span className="text-red-500">*</span>
+          </label>
+          <textarea
+            className={`w-full px-3 py-2 text-sm rounded-lg border bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 outline-none transition font-mono resize-none
+              ${ready ? 'border-green-400 focus:border-green-500' : 'border-gray-200 dark:border-gray-700 focus:border-purple-500'}`}
+            rows={3}
+            value={chaveInput}
+            onChange={e => setChaveInput(e.target.value)}
+            placeholder="3524 1234 5678 9012 3456 7890 1234 5678 9012 3456 78"
+            autoFocus
+          />
+          <span className={`text-xs text-right ${ready ? 'text-green-500' : 'text-gray-400'}`}>
+            {digits.length}/44 dígitos{ready ? ' ✓' : ''}
+          </span>
+        </div>
+        {cameraStep === 'error' && cameraError && (
+          <div className="text-xs text-red-500 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg px-3 py-2">
+            {cameraError}
+          </div>
+        )}
+        <div className="flex gap-2 pt-1">
+          <button
+            type="button"
+            onClick={() => { setCameraStep('scanning'); setCameraError(''); setMode(null); }}
+            className="flex-1 px-4 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition"
+          >
+            Voltar
+          </button>
+          <button
+            type="submit"
+            disabled={!ready || loading}
+            className="flex-1 px-4 py-2 text-sm bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded-lg transition font-medium"
+          >
+            {loading ? 'Consultando…' : (isEan ? 'Buscar produto' : 'Consultar NF-e')}
+          </button>
+        </div>
+      </form>
+    );
+  }
+
   // ─── Manual form ───────────────────────────────────────────────
   function renderManual() {
+    const VALID_EAN_LENGTHS = new Set([8, 12, 13, 14]);
+
     return (
       <form onSubmit={handleManualSubmit} className="flex flex-col gap-3 py-2">
         {errors._global && (
@@ -216,6 +369,65 @@ export default function AddProductModal({ onClose, onProductsAdded, categories =
             {errors._global}
           </div>
         )}
+
+        {/* Código de barras + busca automática */}
+        <Field label="Código de barras (EAN)">
+          <div className="flex gap-2 items-center">
+            <input
+              className={inputCls(false) + ' flex-1'}
+              value={form.codigo_barras}
+              inputMode="numeric"
+              maxLength={14}
+              placeholder="Ex.: 7891000100103"
+              onChange={e => {
+                const v = e.target.value.replace(/\D/g, '');
+                setForm(f => ({ ...f, codigo_barras: v }));
+                setBarcodeWarning('');
+                setBarcodeImagem(null);
+              }}
+              onBlur={() => {
+                if (VALID_EAN_LENGTHS.has(form.codigo_barras.length)) {
+                  lookupByBarcode(form.codigo_barras);
+                }
+              }}
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  if (VALID_EAN_LENGTHS.has(form.codigo_barras.length)) {
+                    lookupByBarcode(form.codigo_barras);
+                  }
+                }
+              }}
+            />
+            {barcodeLoading && (
+              <span className="text-xs text-purple-500 shrink-0 animate-pulse">Buscando…</span>
+            )}
+          </div>
+        </Field>
+
+        {/* Imagem do produto */}
+        {barcodeImagem && (
+          <div className="flex justify-center">
+            <img
+              src={barcodeImagem}
+              alt="Imagem do produto"
+              className="h-24 w-24 object-contain rounded-lg border border-gray-200 dark:border-gray-700 bg-white"
+              onError={() => setBarcodeImagem(null)}
+            />
+          </div>
+        )}
+
+        {/* Aviso de busca */}
+        {barcodeWarning && (
+          <div className={`text-xs rounded-lg px-3 py-2 border ${
+            barcodeWarning.startsWith('⚠️')
+              ? 'text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800'
+              : 'text-blue-600 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800'
+          }`}>
+            {barcodeWarning}
+          </div>
+        )}
+
         <Field label="Nome do produto" required error={errors.nome}>
           <input
             className={inputCls(errors.nome)}
@@ -339,7 +551,7 @@ export default function AddProductModal({ onClose, onProductsAdded, categories =
               Usar modo Manual
             </button>
             <button
-              onClick={() => { setCameraStep('scanning'); setCameraError(''); startScanner(); }}
+              onClick={() => { setCameraStep('scanning'); setCameraError(''); startScanner(scanMode); }}
               className="flex-1 px-4 py-2 text-sm bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition font-medium"
             >
               Tentar novamente
@@ -352,9 +564,26 @@ export default function AddProductModal({ onClose, onProductsAdded, categories =
     // scanning
     return (
       <div className="flex flex-col gap-3 py-2">
-        <p className="text-xs text-center text-gray-500 dark:text-gray-400">
-          Aponte a câmera para o QR code ou código de barras da NF-e
-        </p>
+        <div className="flex gap-2">
+          <button
+            onClick={() => scanMode !== 'qr' && switchScanMode('qr')}
+            className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm rounded-lg border transition font-medium
+              ${scanMode === 'qr'
+                ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
+                : 'border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
+          >
+            <span>⬛</span> QR Code
+          </button>
+          <button
+            onClick={() => scanMode !== 'barcode' && switchScanMode('barcode')}
+            className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm rounded-lg border transition font-medium
+              ${scanMode === 'barcode'
+                ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300'
+                : 'border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
+          >
+            <span>▬</span> Código de Barras
+          </button>
+        </div>
         <div
           id="nfe-scanner-region"
           ref={scannerRef}
@@ -377,6 +606,7 @@ export default function AddProductModal({ onClose, onProductsAdded, categories =
   // ─── Modal shell ───────────────────────────────────────────────
   const title = mode === 'manual' ? 'Cadastro Manual'
     : mode === 'camera' ? 'Escanear NF-e'
+    : mode === 'chave' ? 'Chave de Acesso'
     : 'Adicionar Produto';
 
   return (
@@ -413,6 +643,8 @@ export default function AddProductModal({ onClose, onProductsAdded, categories =
           {!mode && renderModeSelect()}
           {mode === 'manual' && renderManual()}
           {mode === 'camera' && renderCamera()}
+          {mode === 'chave' && cameraStep !== 'confirm' && renderChave()}
+          {mode === 'chave' && cameraStep === 'confirm' && renderCamera()}
         </div>
       </div>
     </div>

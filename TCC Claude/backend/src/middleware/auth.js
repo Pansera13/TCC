@@ -22,7 +22,7 @@ async function authMiddleware(req, res, next) {
   //    Falha do banco NÃO é 401: responde 503 para o painel não encerrar a sessão por um erro passageiro.
   let conta;
   try {
-    const { rows } = await db.query('SELECT nome, role, ativo FROM usuarios WHERE id = $1', [payload.id]);
+    const { rows } = await db.query('SELECT nome, role, ativo, tenant_id FROM usuarios WHERE id = $1', [payload.id]);
     conta = rows[0];
   } catch (err) {
     console.error('auth: falha ao consultar a conta', err.message);
@@ -38,6 +38,7 @@ async function authMiddleware(req, res, next) {
 
   payload.nome = conta.nome;
   payload.role = conta.role;
+  payload.tenant_id = conta.tenant_id;
   req.user = payload;
   next();
 }

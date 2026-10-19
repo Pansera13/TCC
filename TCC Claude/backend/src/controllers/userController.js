@@ -20,7 +20,8 @@ async function bloqueiaAlvoSuperior(req, res, id) {
 
 async function listUsers(req, res) {
   const { rows } = await db.query(
-    `SELECT id, nome, nome_empresa, email, role, ativo, criado_em FROM usuarios ORDER BY criado_em ASC`
+    `SELECT id, nome, nome_empresa, email, role, ativo, criado_em FROM usuarios WHERE tenant_id = $1 ORDER BY criado_em ASC`,
+    [req.user.tenant_id]
   );
   return res.json(rows);
 }
@@ -55,9 +56,9 @@ async function createUser(req, res) {
   }
 
   const { rows } = await db.query(
-    `INSERT INTO usuarios (nome, nome_empresa, cpf_cnpj, email, senha_hash, role)
-     VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-    [nome.trim(), nome.trim(), cpf_cnpj.trim(), email.toLowerCase().trim(), senha_hash, userRole]
+    `INSERT INTO usuarios (nome, nome_empresa, cpf_cnpj, email, senha_hash, role, tenant_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+    [nome.trim(), nome.trim(), cpf_cnpj.trim(), email.toLowerCase().trim(), senha_hash, userRole, req.user.tenant_id]
   );
 
   return res.status(201).json({ id: rows[0].id, message: 'Usuário criado com sucesso.' });

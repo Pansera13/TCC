@@ -24,6 +24,7 @@ async function getReport(req, res) {
     return res.status(400).json({ message: `O período máximo é de ${MAX_DIAS} dias.` });
   }
 
+  const tenantId = req.user.tenant_id;
   const periodo = [
     `m.created_at >= ($1::date)::timestamp AT TIME ZONE '${FUSO}'`,
     `m.created_at < (($2::date + 1)::timestamp AT TIME ZONE '${FUSO}')`,
@@ -35,21 +36,20 @@ async function getReport(req, res) {
       `SELECT COUNT(*)::int AS total,
               COUNT(*) FILTER (WHERE quantidade > 0 AND quantidade <= $1)::int AS baixo,
               COUNT(*) FILTER (WHERE quantidade = 0)::int AS esgotados
-       FROM products`,
-      [LOW_STOCK_THRESHOLD]
+       FROM products WHERE tenant_id = $2`,
+      [LOW_STOCK_THRESHOLD, tenantId]
     ),
     db.query(
       `SELECT COALESCE(SUM(m.quantidade) FILTER (WHERE m.tipo = 'entrada'), 0) AS entradas,
               COALESCE(SUM(m.quantidade) FILTER (WHERE m.tipo = 'saida'), 0) AS saidas
-       FROM movements m WHERE m.tipo IN ('entrada','saida') AND ${periodo}`,
-      params
+       FROM movements m WHERE m.tipo IN ('entrada','saida') AND m.tenant_id = $3 AND ${periodo}`,
+      [...params, tenantId]
     ),
-    // Usa o nome gravado no histórico, então inclui produtos já removidos
     db.query(
       `SELECT m.product_id, MAX(m.product_nome) AS nome, SUM(m.quantidade) AS quantidade
-       FROM movements m WHERE m.tipo = 'saida' AND ${periodo}
+       FROM movements m WHERE m.tipo = 'saida' AND m.tenant_id = $3 AND ${periodo}
        GROUP BY m.product_id ORDER BY SUM(m.quantidade) DESC, MAX(m.product_nome) LIMIT 10`,
-      params
+      [...params, tenantId]
     ),
     db.query(
       `SELECT p.id AS product_id, p.nome, p.categoria, p.unidade, p.quantidade AS estoque,
@@ -57,17 +57,18 @@ async function getReport(req, res) {
        FROM products p
        LEFT JOIN (
          SELECT m.product_id, SUM(m.quantidade) AS retirado
-         FROM movements m WHERE m.tipo = 'saida' AND ${periodo} GROUP BY m.product_id
+         FROM movements m WHERE m.tipo = 'saida' AND m.tenant_id = $3 AND ${periodo} GROUP BY m.product_id
        ) s ON s.product_id = p.id
+       WHERE p.tenant_id = $4
        ORDER BY COALESCE(s.retirado, 0) DESC, p.nome`,
-      params
+      [...params, tenantId, tenantId]
     ),
     db.query(
       `SELECT COALESCE(NULLIF(TRIM(p.categoria), ''), 'Sem Categoria') AS categoria, SUM(m.quantidade) AS quantidade
        FROM movements m JOIN products p ON p.id = m.product_id
-       WHERE m.tipo = 'saida' AND ${periodo}
+       WHERE m.tipo = 'saida' AND m.tenant_id = $3 AND ${periodo}
        GROUP BY 1 ORDER BY SUM(m.quantidade) DESC, 1`,
-      params
+      [...params, tenantId]
     ),
   ]);
 

@@ -1,20 +1,34 @@
-const https = require('https');
-const http = require('http');
+const axios = require('axios');
 const xml2js = require('xml2js');
 
 const TIMEOUT_MS = 10000;
+const MAX_RETRIES = 2;
+const RETRY_DELAY_MS = 1500;
 
-function httpGet(url) {
-  return new Promise((resolve, reject) => {
-    const lib = url.startsWith('https') ? https : http;
-    const req = lib.get(url, { timeout: TIMEOUT_MS }, (res) => {
-      let data = '';
-      res.on('data', chunk => { data += chunk; });
-      res.on('end', () => resolve({ status: res.statusCode, body: data }));
+const HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+  'Accept-Language': 'pt-BR,pt;q=0.9',
+};
+
+async function httpGet(url, attempt = 1) {
+  try {
+    const res = await axios.get(url, {
+      timeout: TIMEOUT_MS,
+      headers: HEADERS,
+      maxRedirects: 5,
+      responseType: 'text',
+      validateStatus: () => true, // não lança erro para nenhum status HTTP
     });
-    req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
-    req.on('error', reject);
-  });
+    return { status: res.status, body: res.data };
+  } catch (err) {
+    if (attempt < MAX_RETRIES && (err.code === 'ECONNRESET' || err.code === 'ETIMEDOUT' || err.message === 'timeout')) {
+      await new Promise(r => setTimeout(r, RETRY_DELAY_MS));
+      return httpGet(url, attempt + 1);
+    }
+    if (err.code === 'ETIMEDOUT' || err.message === 'timeout') throw new Error('timeout');
+    throw err;
+  }
 }
 
 // Extract 44-digit access key from raw scan value (plain key or URL)
@@ -67,8 +81,17 @@ async function queryNfe(chaveOrUrl) {
   if (res.status === 404 || res.body.includes('NF-e não encontrada')) {
     throw Object.assign(new Error('NF-e não encontrada para a chave informada.'), { status: 404 });
   }
-  if (res.status !== 200) {
-    throw Object.assign(new Error(`SEFAZ retornou erro ${res.status}.`), { status: 502 });
+  if (res.status === 302) {
+    throw Object.assign(new Error('A consulta pública da SEFAZ exige captcha e não pode ser feita automaticamente. Para cadastrar, escaneie o código de barras do produto ou use o cadastro manual.'), { status: 502 });
+  }
+  if (res.status === 429 || res.body.toLowerCase().includes('muitas requisi')) {
+    throw Object.assign(new Error('Muitas consultas em sequência. Aguarde alguns instantes e tente novamente.'), { status: 429 });
+  }
+  if (res.status === 503 || res.body.toLowerCase().includes('fora do ar') || res.body.toLowerCase().includes('indispon')) {
+    throw Object.assign(new Error('O serviço da SEFAZ está temporariamente indisponível. Tente novamente em alguns minutos.'), { status: 503 });
+  }
+  if (res.status !== 200 || !res.body.trim().startsWith('<')) {
+    throw Object.assign(new Error('A SEFAZ não liberou o XML desta nota (a consulta pública exige captcha). Para cadastrar, escaneie o código de barras do produto ou use o cadastro manual.'), { status: 502 });
   }
 
   const produtos = await parseNfeXml(res.body);

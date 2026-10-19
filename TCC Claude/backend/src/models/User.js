@@ -54,7 +54,9 @@ async function create({ nome, nome_empresa, cpf_cnpj, email, senha_hash }) {
      VALUES ($1, $2, $3, $4, $5) RETURNING id`,
     [nome, nome_empresa, cpf_cnpj, email.toLowerCase().trim(), senha_hash]
   );
-  return rows[0].id;
+  const id = rows[0].id;
+  await db.query(`UPDATE usuarios SET tenant_id = $1 WHERE id = $1`, [id]);
+  return id;
 }
 
 async function updateResetCode(id, reset_code_hash, reset_code_expires_at) {

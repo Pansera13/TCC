@@ -2,7 +2,7 @@ const db = require('../db');
 const { logMovement } = require('../services/movementService');
 
 async function createProduct(req, res) {
-  const { nome, quantidade, unidade, peso_kg, categoria, fornecedor } = req.body;
+  const { nome, quantidade, unidade, peso_kg, categoria, fornecedor, codigo_barras } = req.body;
 
   if (!nome || !String(nome).trim()) {
     return res.status(400).json({ message: 'Nome é obrigatório.' });
@@ -16,8 +16,8 @@ async function createProduct(req, res) {
   }
 
   const { rows } = await db.query(
-    `INSERT INTO products (nome, quantidade, unidade, peso_kg, categoria, fornecedor)
-     VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+    `INSERT INTO products (nome, quantidade, unidade, peso_kg, categoria, fornecedor, codigo_barras, tenant_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
     [
       String(nome).trim(),
       qty,
@@ -25,6 +25,8 @@ async function createProduct(req, res) {
       (peso_kg != null && peso_kg !== '' && !isNaN(parseFloat(peso_kg))) ? parseFloat(peso_kg) : null,
       categoria ? String(categoria).trim() : null,
       fornecedor ? String(fornecedor).trim() : null,
+      codigo_barras ? String(codigo_barras).trim() : null,
+      req.user.tenant_id,
     ]
   );
 
@@ -35,6 +37,7 @@ async function createProduct(req, res) {
     quantidade: qty,
     user_id: req.user.id,
     user_nome: req.user.nome,
+    tenant_id: req.user.tenant_id,
   });
 
   return res.status(201).json({ id: rows[0].id, message: 'Produto criado com sucesso.' });
@@ -56,8 +59,8 @@ async function updateProduct(req, res) {
   }
 
   const { rows: atuais } = await db.query(
-    'SELECT nome, quantidade, unidade, categoria, fornecedor FROM products WHERE id = $1',
-    [id]
+    'SELECT nome, quantidade, unidade, categoria, fornecedor FROM products WHERE id = $1 AND tenant_id = $2',
+    [id, req.user.tenant_id]
   );
   if (atuais.length === 0) {
     return res.status(404).json({ message: 'Produto não encontrado.' });
@@ -73,8 +76,8 @@ async function updateProduct(req, res) {
   };
 
   const { rowCount } = await db.query(
-    `UPDATE products SET nome = $1, quantidade = $2, unidade = $3, categoria = $4, fornecedor = $5 WHERE id = $6`,
-    [novo.nome, novo.quantidade, novo.unidade, novo.categoria, novo.fornecedor, id]
+    `UPDATE products SET nome = $1, quantidade = $2, unidade = $3, categoria = $4, fornecedor = $5 WHERE id = $6 AND tenant_id = $7`,
+    [novo.nome, novo.quantidade, novo.unidade, novo.categoria, novo.fornecedor, id, req.user.tenant_id]
   );
 
   if (rowCount === 0) {
@@ -99,6 +102,7 @@ async function updateProduct(req, res) {
       quantidade: 'quantidade' in depois ? Math.abs(depois.quantidade - antes.quantidade) : 0,
       user_id: req.user.id,
       user_nome: req.user.nome,
+      tenant_id: req.user.tenant_id,
       detalhes: { antes, depois },
     });
   }
@@ -112,7 +116,7 @@ async function deleteProduct(req, res) {
     return res.status(400).json({ message: 'Produto inválido.' });
   }
 
-  const { rows } = await db.query('SELECT nome, quantidade FROM products WHERE id = $1', [id]);
+  const { rows } = await db.query('SELECT nome, quantidade FROM products WHERE id = $1 AND tenant_id = $2', [id, req.user.tenant_id]);
   if (rows.length === 0) {
     return res.status(404).json({ message: 'Produto não encontrado.' });
   }
@@ -134,6 +138,7 @@ async function deleteProduct(req, res) {
     quantidade: parseFloat(rows[0].quantidade),
     user_id: req.user.id,
     user_nome: req.user.nome,
+    tenant_id: req.user.tenant_id,
   });
 
   return res.json({ message: 'Produto removido com sucesso.' });
@@ -148,12 +153,12 @@ async function withdrawProduct(req, res) {
   }
 
   const { rows, rowCount } = await db.query(
-    `UPDATE products SET quantidade = quantidade - $1 WHERE id = $2 AND quantidade >= $1 RETURNING nome`,
-    [quantidade, id]
+    `UPDATE products SET quantidade = quantidade - $1 WHERE id = $2 AND tenant_id = $3 AND quantidade >= $1 RETURNING nome`,
+    [quantidade, id, req.user.tenant_id]
   );
 
   if (rowCount === 0) {
-    const { rows: check } = await db.query('SELECT id, quantidade FROM products WHERE id = $1', [id]);
+    const { rows: check } = await db.query('SELECT id, quantidade FROM products WHERE id = $1 AND tenant_id = $2', [id, req.user.tenant_id]);
     if (check.length === 0) return res.status(404).json({ message: 'Produto não encontrado.' });
     return res.status(400).json({ message: `Estoque insuficiente. Disponível: ${check[0].quantidade}.` });
   }
@@ -165,6 +170,7 @@ async function withdrawProduct(req, res) {
     quantidade,
     user_id: req.user.id,
     user_nome: req.user.nome,
+    tenant_id: req.user.tenant_id,
   });
 
   return res.json({ message: 'Retirada registrada com sucesso.' });
@@ -172,7 +178,8 @@ async function withdrawProduct(req, res) {
 
 async function listProducts(req, res) {
   const { rows } = await db.query(
-    `SELECT id, nome, quantidade, unidade, peso_kg, categoria, fornecedor, created_at FROM products ORDER BY created_at DESC`
+    `SELECT id, nome, quantidade, unidade, peso_kg, categoria, fornecedor, created_at FROM products WHERE tenant_id = $1 ORDER BY created_at DESC`,
+    [req.user.tenant_id]
   );
   return res.json(rows);
 }

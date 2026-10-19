@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3001',
+  baseURL: import.meta.env.VITE_API_URL || '',
 });
 
 api.interceptors.request.use((config) => {
@@ -41,6 +41,7 @@ export const resetPassword = (resetToken, novaSenha) =>
   api.post('/api/auth/reset-password', { resetToken, novaSenha });
 
 export const listProducts = () => api.get('/api/products');
+export const lookupBarcode = (codigo) => api.get(`/api/products/barcode/${encodeURIComponent(codigo)}`);
 export const createProduct = (data) => api.post('/api/products', data);
 export const deleteProduct = (id) => api.delete(`/api/products/${id}`);
 export const withdrawProduct = (id, quantidade) => api.post(`/api/products/${id}/withdraw`, { quantidade });
