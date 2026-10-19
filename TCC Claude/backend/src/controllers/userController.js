@@ -1,6 +1,9 @@
 const bcrypt = require('bcrypt');
 const db = require('../db');
-const { rank, cargoValido, podeGerenciar } = require('../utils/roles');
+const { nivel: rank, cargoValido } = require('../utils/permissoes');
+
+// Provisório até a reescrita das regras (tarefa 1.4): alvo de nível igual ou inferior
+const podeGerenciar = (ator, alvo) => rank(alvo) <= rank(ator);
 
 const NAO_PODE_ALVO = 'Você não pode alterar alguém com cargo superior ao seu.';
 

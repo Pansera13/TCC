@@ -35,6 +35,11 @@ export default function AddProductModal({ onClose, onProductsAdded, categories =
   const [scanMode, setScanMode] = useState('qr'); // 'qr' | 'barcode'
   const [chaveInput, setChaveInput] = useState('');
 
+  // upload de XML da NF-e
+  const [xmlError, setXmlError] = useState('');
+  const [xmlDragging, setXmlDragging] = useState(false);
+  const xmlInputRef = useRef(null);
+
   // barcode lookup
   const [barcodeLoading, setBarcodeLoading] = useState(false);
   const [barcodeWarning, setBarcodeWarning] = useState('');
@@ -99,12 +104,18 @@ export default function AddProductModal({ onClose, onProductsAdded, categories =
 
     try {
       await html5Qrcode.start(
-        { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 }, advanced: [{ focusMode: 'continuous' }] },
+        { facingMode: 'environment' }, // a lib exige exatamente 1 chave aqui
         {
           fps: 20,
           qrbox,
           disableFlip: true,
           rememberLastUsedCamera: false,
+          videoConstraints: {
+            facingMode: 'environment',
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            advanced: [{ focusMode: 'continuous' }],
+          },
         },
         async (decodedText) => {
           clearTimeout(timeout);
@@ -145,10 +156,9 @@ export default function AddProductModal({ onClose, onProductsAdded, categories =
       const match44 = raw.match(/\d{44}/);
 
       if (match44) {
-        // NF-e: chave de acesso com 44 dígitos
-        const { data } = await api.get(`/api/nfe/${encodeURIComponent(match44[0])}`);
-        setNfeProducts(data.produtos);
-        setCameraStep('confirm');
+        // NF-e: não há consulta por chave de acesso; o cadastro da nota é feito pelo XML
+        setCameraStep('error');
+        setCameraError('A consulta de NF-e pela chave de acesso não está disponível. Use a opção "Enviar XML da NF-e".');
         return;
       }
 
@@ -261,6 +271,89 @@ export default function AddProductModal({ onClose, onProductsAdded, categories =
     }
   }
 
+  // ─── Upload de XML da NF-e ─────────────────────────────────────
+  async function handleXmlFile(file) {
+    if (!file) return;
+    setXmlError('');
+    if (!file.name.toLowerCase().endsWith('.xml')) { setXmlError('Envie um arquivo no formato .xml.'); return; }
+    if (file.size > 2 * 1024 * 1024) { setXmlError('O arquivo excede o limite de 2 MB.'); return; }
+
+    setLoading(true);
+    try {
+      const fd = new FormData();
+      fd.append('arquivo', file);
+      const { data } = await api.post('/api/nfe/xml', fd);
+      setNfeProducts(data.produtos);
+      setCameraStep('confirm');
+    } catch (err) {
+      setXmlError(err.response?.data?.message || 'Não foi possível ler o XML da NF-e.');
+    } finally {
+      setLoading(false);
+      if (xmlInputRef.current) xmlInputRef.current.value = ''; // permite reenviar o mesmo arquivo
+    }
+  }
+
+  function renderXml() {
+    const erro = xmlError || (cameraStep === 'error' ? cameraError : '');
+
+    return (
+      <div className="flex flex-col gap-4 py-2">
+        <p className="text-xs text-gray-500 dark:text-gray-400">
+          Envie o arquivo XML da NF-e (modelo 55) ou NFC-e (modelo 65). Tamanho máximo: 2 MB.
+        </p>
+        <div
+          onClick={() => !loading && xmlInputRef.current?.click()}
+          onDragOver={(e) => { e.preventDefault(); setXmlDragging(true); }}
+          onDragLeave={() => setXmlDragging(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setXmlDragging(false);
+            if (!loading) handleXmlFile(e.dataTransfer.files?.[0]);
+          }}
+          className={`flex flex-col items-center gap-2 p-8 rounded-xl border-2 border-dashed text-center transition cursor-pointer
+            ${xmlDragging
+              ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20'
+              : 'border-gray-300 dark:border-gray-700 hover:border-purple-500 dark:hover:border-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20'}`}
+        >
+          <span className="text-4xl">📄</span>
+          <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
+            {loading ? 'Lendo o XML…' : 'Clique para escolher ou arraste o arquivo aqui'}
+          </span>
+          <span className="text-xs text-gray-400">Apenas arquivos .xml</span>
+          <input
+            ref={xmlInputRef}
+            type="file"
+            accept=".xml,text/xml,application/xml"
+            className="hidden"
+            onChange={(e) => handleXmlFile(e.target.files?.[0])}
+          />
+        </div>
+        {erro && (
+          <div className="text-xs text-red-500 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg px-3 py-2">
+            {erro}
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={() => setMode(null)}
+          className="w-full px-4 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition"
+        >
+          Voltar
+        </button>
+      </div>
+    );
+  }
+
+  // Botão ◀ do cabeçalho: na confirmação do XML volta para a escolha do arquivo
+  function handleHeaderBack() {
+    if (mode === 'xml' && cameraStep === 'confirm') {
+      setCameraStep('scanning');
+      setNfeProducts([]);
+      return;
+    }
+    setMode(null);
+  }
+
   // ─── Mode selector ─────────────────────────────────────────────
   function renderModeSelect() {
     return (
@@ -290,19 +383,27 @@ export default function AddProductModal({ onClose, onProductsAdded, categories =
             className="col-span-2 flex flex-col items-center gap-2 py-4 px-5 rounded-xl border-2 border-gray-200 dark:border-gray-700 hover:border-purple-500 dark:hover:border-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition group"
           >
             <span className="text-3xl">🔑</span>
-            <span className="font-semibold text-sm text-gray-700 dark:text-gray-200 group-hover:text-purple-700 dark:group-hover:text-purple-300">Digitar chave de acesso</span>
-            <span className="text-xs text-gray-400 text-center">Cole ou digite a chave de acesso da NF-e (44 dígitos)</span>
+            <span className="font-semibold text-sm text-gray-700 dark:text-gray-200 group-hover:text-purple-700 dark:group-hover:text-purple-300">Digitar código de barras</span>
+            <span className="text-xs text-gray-400 text-center">Digite o código de barras (EAN) do produto</span>
+          </button>
+          <button
+            onClick={() => { setXmlError(''); setCameraError(''); setCameraStep('scanning'); setNfeProducts([]); setMode('xml'); }}
+            className="col-span-2 flex flex-col items-center gap-2 py-4 px-5 rounded-xl border-2 border-gray-200 dark:border-gray-700 hover:border-purple-500 dark:hover:border-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition group"
+          >
+            <span className="text-3xl">📄</span>
+            <span className="font-semibold text-sm text-gray-700 dark:text-gray-200 group-hover:text-purple-700 dark:group-hover:text-purple-300">Enviar XML da NF-e</span>
+            <span className="text-xs text-gray-400 text-center">Selecione ou arraste o arquivo XML da nota fiscal</span>
           </button>
         </div>
       </div>
     );
   }
 
-  // ─── Chave de acesso manual ────────────────────────────────────
+  // ─── Código de barras digitado ────────────────────────────────────
   function renderChave() {
     const digits = chaveInput.replace(/\D/g, '');
     const isEan = digits.length >= 8 && digits.length <= 14;
-    const ready = digits.length === 44 || isEan;
+    const ready = isEan;
 
     async function handleConsultar(e) {
       e.preventDefault();
@@ -314,11 +415,11 @@ export default function AddProductModal({ onClose, onProductsAdded, categories =
     return (
       <form onSubmit={handleConsultar} className="flex flex-col gap-4 py-2">
         <p className="text-xs text-gray-500 dark:text-gray-400">
-          Digite o código de barras do produto (8 a 14 dígitos) ou os 44 dígitos da chave de acesso da NF-e.
+          Digite o código de barras do produto (8 a 14 dígitos).
         </p>
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-gray-600 dark:text-gray-400">
-            Chave de acesso <span className="text-red-500">*</span>
+            Código de barras <span className="text-red-500">*</span>
           </label>
           <textarea
             className={`w-full px-3 py-2 text-sm rounded-lg border bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 outline-none transition font-mono resize-none
@@ -326,11 +427,11 @@ export default function AddProductModal({ onClose, onProductsAdded, categories =
             rows={3}
             value={chaveInput}
             onChange={e => setChaveInput(e.target.value)}
-            placeholder="3524 1234 5678 9012 3456 7890 1234 5678 9012 3456 78"
+            placeholder="Ex.: 7891000100103"
             autoFocus
           />
           <span className={`text-xs text-right ${ready ? 'text-green-500' : 'text-gray-400'}`}>
-            {digits.length}/44 dígitos{ready ? ' ✓' : ''}
+            {digits.length} dígitos{ready ? ' ✓' : ''}
           </span>
         </div>
         {cameraStep === 'error' && cameraError && (
@@ -351,7 +452,7 @@ export default function AddProductModal({ onClose, onProductsAdded, categories =
             disabled={!ready || loading}
             className="flex-1 px-4 py-2 text-sm bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded-lg transition font-medium"
           >
-            {loading ? 'Consultando…' : (isEan ? 'Buscar produto' : 'Consultar NF-e')}
+            {loading ? 'Consultando…' : "Buscar produto"}
           </button>
         </div>
       </form>
@@ -606,7 +707,8 @@ export default function AddProductModal({ onClose, onProductsAdded, categories =
   // ─── Modal shell ───────────────────────────────────────────────
   const title = mode === 'manual' ? 'Cadastro Manual'
     : mode === 'camera' ? 'Escanear NF-e'
-    : mode === 'chave' ? 'Chave de Acesso'
+    : mode === 'chave' ? 'Código de Barras'
+    : mode === 'xml' ? 'Enviar XML da NF-e'
     : 'Adicionar Produto';
 
   return (
@@ -620,7 +722,7 @@ export default function AddProductModal({ onClose, onProductsAdded, categories =
           <div className="flex items-center gap-2">
             {mode && (
               <button
-                onClick={() => setMode(null)}
+                onClick={handleHeaderBack}
                 className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition text-xs"
                 title="Voltar"
               >
@@ -645,6 +747,7 @@ export default function AddProductModal({ onClose, onProductsAdded, categories =
           {mode === 'camera' && renderCamera()}
           {mode === 'chave' && cameraStep !== 'confirm' && renderChave()}
           {mode === 'chave' && cameraStep === 'confirm' && renderCamera()}
+          {mode === 'xml' && (cameraStep === 'confirm' ? renderCamera() : renderXml())}
         </div>
       </div>
     </div>

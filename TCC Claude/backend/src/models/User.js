@@ -59,18 +59,4 @@ async function create({ nome, nome_empresa, cpf_cnpj, email, senha_hash }) {
   return id;
 }
 
-async function updateResetCode(id, reset_code_hash, reset_code_expires_at) {
-  await db.query(
-    `UPDATE usuarios SET reset_code_hash = $1, reset_code_expires_at = $2 WHERE id = $3`,
-    [reset_code_hash, reset_code_expires_at, id]
-  );
-}
-
-async function updatePassword(id, senha_hash) {
-  await db.query(
-    `UPDATE usuarios SET senha_hash = $1, reset_code_hash = NULL, reset_code_expires_at = NULL WHERE id = $2`,
-    [senha_hash, id]
-  );
-}
-
-module.exports = { findByIdentifier, findByEmail, findByCpfCnpj, create, updateResetCode, updatePassword };
+module.exports = { findByIdentifier, findByEmail, findByCpfCnpj, create };
