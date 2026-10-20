@@ -2,7 +2,7 @@
 
 ## 1. Pré-checagem de segurança
 
-- [ ] 1.1 Confirmar com o usuário que o repositório `Pansera13/TCC` no GitHub está **privado**. Verificar pela resposta explícita do usuário antes de seguir.
+- [x] 1.1 Confirmar com o usuário que o repositório `Pansera13/TCC` no GitHub está **privado**. Verificar pela resposta explícita do usuário antes de seguir.
 
 ## 2. Ajustar o .gitignore
 
@@ -13,4 +13,4 @@
 
 - [x] 3.1 Rodar `git add .gitignore frontend/.env backend/.env` e verificar que `git status` mostra os três arquivos como staged.
 - [x] 3.2 Criar commit e verificar que `git ls-files frontend/.env backend/.env` lista os dois arquivos.
-- [ ] 3.3 Fazer `git push origin main`, somente com autorização explícita do usuário, e verificar que os arquivos aparecem no GitHub.
+- [x] 3.3 Fazer `git push origin main`, somente com autorização explícita do usuário, e verificar que os arquivos aparecem no GitHub.
