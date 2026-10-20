@@ -1,6 +1,7 @@
 const db = require('../db');
 
 const TIPOS = ['entrada', 'saida', 'edicao', 'remocao'];
+const COLUNAS_ORDEM = new Set(['created_at', 'product_nome', 'tipo', 'quantidade', 'user_nome', 'origem']);
 const DATA_ISO = /^\d{4}-\d{2}-\d{2}$/;
 const FUSO = 'America/Sao_Paulo';
 const PAGE_SIZE_PADRAO = 20;
@@ -11,10 +12,10 @@ function inteiroPositivo(valor) {
   return Number.isInteger(n) && n > 0 ? n : null;
 }
 
-// GET /api/movements?page&pageSize&user&tipo&q&from&to
-// Resposta: { items, total, page, pageSize }, do mais recente para o mais antigo.
+// GET /api/movements?page&pageSize&user&tipo&q&from&to&orderBy&orderDir
+// Resposta: { items, total, page, pageSize }
 async function listMovements(req, res) {
-  const { user, tipo, q, from, to } = req.query;
+  const { user, tipo, q, from, to, orderBy, orderDir } = req.query;
 
   const page = req.query.page === undefined ? 1 : inteiroPositivo(req.query.page);
   const pageSize = req.query.pageSize === undefined ? PAGE_SIZE_PADRAO : inteiroPositivo(req.query.pageSize);
@@ -57,10 +58,13 @@ async function listMovements(req, res) {
   const { rows: contagem } = await db.query(`SELECT COUNT(*)::int AS total FROM movements ${filtro}`, params);
   const total = contagem[0].total;
 
+  const coluna = COLUNAS_ORDEM.has(orderBy) ? orderBy : 'created_at';
+  const dir = orderDir === 'asc' ? 'ASC' : 'DESC';
+
   const { rows: items } = await db.query(
     `SELECT id, product_id, product_nome, tipo, quantidade, user_id, user_nome, origem, pedido_id, detalhes, created_at
      FROM movements ${filtro}
-     ORDER BY created_at DESC, id DESC
+     ORDER BY ${coluna} ${dir}, id DESC
      LIMIT ${add(limit)} OFFSET ${add((page - 1) * limit)}`,
     params
   );

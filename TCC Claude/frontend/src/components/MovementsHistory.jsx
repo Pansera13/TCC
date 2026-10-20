@@ -1,8 +1,10 @@
 import { Fragment, useEffect, useState } from 'react';
 import { listMovements, listMovementUsers } from '../services/api';
 import Pagination from './Pagination';
+import SortTh from './SortTh';
 import { zebra } from '../utils/tables';
 import { useFitRows } from '../utils/useFitRows';
+import { proximaOrdem } from '../utils/sort';
 
 const PAGE_SIZE_INICIAL = 8;
 const FILTROS_VAZIOS = { user: '', tipo: '', q: '', from: '', to: '' };
@@ -38,12 +40,13 @@ export default function MovementsHistory() {
   const [usuarios, setUsuarios] = useState([]);
   const [aberto, setAberto] = useState(null);
   const [recarregar, setRecarregar] = useState(0);
+  const [ordem, setOrdem] = useState({ key: 'created_at', dir: 'desc' });
   // Linhas por página = quantas cabem na altura disponível (sem rolagem vertical)
   const [areaRef, pageSize] = useFitRows(PAGE_SIZE_INICIAL);
   const periodoInvalido = !!(filtros.from && filtros.to && filtros.from > filtros.to);
 
   // Identifica a consulta pedida; "carregando" = a resposta guardada ainda é de outra consulta
-  const key = JSON.stringify([filtros, page, recarregar, pageSize]);
+  const key = JSON.stringify([filtros, page, recarregar, pageSize, ordem]);
   const loading = !periodoInvalido && resp.key !== key;
   const { dados, erro } = resp;
 
@@ -67,6 +70,7 @@ export default function MovementsHistory() {
     let cancelado = false;
     const params = { page, pageSize };
     for (const [k, v] of Object.entries(filtros)) if (v) params[k] = v;
+    if (ordem?.key) { params.orderBy = ordem.key; params.orderDir = ordem.dir; }
 
     listMovements(params)
       .then(({ data }) => { if (!cancelado) setResp({ key, dados: data, erro: '' }); })
@@ -80,6 +84,11 @@ export default function MovementsHistory() {
     setFiltros(f => ({ ...f, [campo]: v }));
     setPage(1);
     setAberto(null);
+  }
+
+  function mudarOrdem(k) {
+    setOrdem(o => proximaOrdem(o, k) ?? { key: 'created_at', dir: 'desc' });
+    setPage(1);
   }
 
   function limpar() {
@@ -113,7 +122,29 @@ export default function MovementsHistory() {
           onChange={e => mudarFiltro('from', e.target.value)} aria-label="Data inicial" />
         <input type="date" className={inputCls} value={filtros.to} min={filtros.from || undefined}
           onChange={e => mudarFiltro('to', e.target.value)} aria-label="Data final" />
-        <div className="flex gap-2">
+        {/* Seletor de ordenação — visível só em telas estreitas onde colunas ficam ocultas */}
+        <select
+          className={`${inputCls} lg:hidden col-span-2`}
+          value={ordem ? `${ordem.key}|${ordem.dir}` : ''}
+          onChange={e => {
+            if (!e.target.value) { setOrdem({ key: 'created_at', dir: 'desc' }); return; }
+            const sep = e.target.value.lastIndexOf('|');
+            setOrdem({ key: e.target.value.slice(0, sep), dir: e.target.value.slice(sep + 1) });
+            setPage(1);
+          }}
+          aria-label="Ordenar por"
+        >
+          <option value="created_at|desc">Data (mais recente)</option>
+          <option value="created_at|asc">Data (mais antiga)</option>
+          <option value="product_nome|asc">Produto A–Z</option>
+          <option value="product_nome|desc">Produto Z–A</option>
+          <option value="tipo|asc">Ação A–Z</option>
+          <option value="quantidade|desc">Maior quantidade</option>
+          <option value="quantidade|asc">Menor quantidade</option>
+          <option value="origem|asc">Origem</option>
+          <option value="user_nome|asc">Responsável A–Z</option>
+        </select>
+        <div className="flex gap-2 col-span-2 lg:col-span-1">
           <button type="button" onClick={limpar} disabled={!temFiltro}
             className="flex-1 px-3 py-2 text-xs rounded-lg border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition disabled:opacity-40 disabled:cursor-not-allowed">
             Limpar
@@ -147,12 +178,12 @@ export default function MovementsHistory() {
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs text-gray-400 dark:text-gray-500 border-b border-gray-100 dark:border-gray-800">
-                <th className="px-4 py-3 font-medium">Data / Hora</th>
-                <th className="px-4 py-3 font-medium">Produto</th>
-                <th className="px-4 py-3 font-medium">Ação</th>
-                <th className="px-4 py-3 font-medium">Quantidade</th>
-                <th className="px-4 py-3 font-medium hide-lt-850">Origem</th>
-                <th className="px-4 py-3 font-medium hide-lt-1100">Responsável</th>
+                <SortTh k="created_at" ordem={ordem} onSort={mudarOrdem} className="px-4 py-3 font-medium">Data / Hora</SortTh>
+                <SortTh k="product_nome" ordem={ordem} onSort={mudarOrdem} className="px-4 py-3 font-medium">Produto</SortTh>
+                <SortTh k="tipo" ordem={ordem} onSort={mudarOrdem} className="px-4 py-3 font-medium">Ação</SortTh>
+                <SortTh k="quantidade" ordem={ordem} onSort={mudarOrdem} className="px-4 py-3 font-medium">Quantidade</SortTh>
+                <SortTh k="origem" ordem={ordem} onSort={mudarOrdem} className="px-4 py-3 font-medium hide-lt-850">Origem</SortTh>
+                <SortTh k="user_nome" ordem={ordem} onSort={mudarOrdem} className="px-4 py-3 font-medium hide-lt-1100">Responsável</SortTh>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50 dark:divide-gray-800">

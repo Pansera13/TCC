@@ -16,5 +16,5 @@
 
 ## 4. Verificação
 
-- [ ] 4.1 Conferir altura ≤ 1,5 cm, troca de abas com destaque da ativa e itens `adminOnly` ocultos para operador
-- [ ] 4.2 Conferir tema claro/escuro, menu do perfil (foto, nome, sair), tela estreita e botões sociais flutuantes sem sobreposição
+- [x] 4.1 Conferir altura ≤ 1,5 cm, troca de abas com destaque da ativa e itens `adminOnly` ocultos para operador
+- [x] 4.2 Conferir tema claro/escuro, menu do perfil (foto, nome, sair), tela estreita e botões sociais flutuantes sem sobreposição

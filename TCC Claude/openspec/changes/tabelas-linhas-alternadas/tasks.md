@@ -19,14 +19,14 @@
 
 ## 4. Verificação
 
-- [ ] 4.1 Conferir visualmente nos temas claro e escuro, em todos os layouts e no histórico, incluindo hover, paginação e centralização em telas larga e estreita
+- [x] 4.1 Conferir visualmente nos temas claro e escuro, em todos os layouts e no histórico, incluindo hover, paginação e centralização em telas larga e estreita
 
 ## 5. Paginação e correção do reset global
 
 - [x] 5.1 Remover `margin: 0; padding: 0` do `*` em `frontend/src/index.css`
 - [x] 5.2 Adicionar o seletor "Ir para" ao `Pagination` e `TABLE_PAGE_SIZE` em `utils/products.js`
 - [x] 5.3 Paginar as tabelas de Início, Sem estoque, Equipe e giro de Relatórios
-- [ ] 5.4 Conferir no navegador (claro, escuro, 360 px) o centro das tabelas, o recuo dos cartões e a navegação entre páginas
+- [x] 5.4 Conferir no navegador (claro, escuro, 360 px) o centro das tabelas, o recuo dos cartões e a navegação entre páginas
 
 ## 6. Ajustes de tamanho e altura
 
@@ -37,4 +37,4 @@
 - [x] 6.5 Colunas Peso (kg) e Cadastro nas tabelas de produtos (Início, Lista/Acordeão, Sem estoque); texto sem reticências; `TABLE_WRAP` passa a `lg:w-[88%]` para tudo caber sem corte
 - [x] 6.6 Tabelas sempre dentro da tela: colunas secundárias somem abaixo de 1350/1100/850 px (`hide-lt-*`), texto quebra linha abaixo de 1280 px e o espaçamento das células diminui abaixo de 640 px; verificado de 360 a 1920 px
 - [x] 6.7 Ordenação por coluna (`utils/sort.js`, `components/SortTh.jsx`) em Início, Produtos, Sem estoque e Equipe; verificado no navegador (quantidade crescente/decrescente, nome A–Z)
-- [ ] 6.8 Ordenação em Movimentações (exige parâmetro de ordem no backend) e seletor de ordem para telas estreitas, onde colunas ficam ocultas
+- [x] 6.8 Ordenação em Movimentações (exige parâmetro de ordem no backend) e seletor de ordem para telas estreitas, onde colunas ficam ocultas
