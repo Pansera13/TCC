@@ -8,7 +8,7 @@ Permite que novos usuários criem uma conta no StockFlow fornecendo dados pessoa
 
 ### Requirement: Campos do formulário de cadastro
 
-O formulário DEVE conter os campos: nome completo (obrigatório), nome da empresa (obrigatório), CPF ou CNPJ (obrigatório, formatação automática, mesmo comportamento do campo de login), e-mail (obrigatório, validação de formato), senha (obrigatório, mínimo 8 caracteres), confirmar senha (obrigatório, DEVE ser igual à senha).
+O formulário DEVE conter os campos: nome completo (obrigatório), nome da empresa (obrigatório), CPF ou CNPJ (obrigatório, formatação automática, mesmo comportamento do campo de login), e-mail (obrigatório, validação de formato), senha (obrigatório, mínimo 8 caracteres), confirmar senha (obrigatório, DEVE ser igual à senha). A validação no envio DEVE capturar os valores atuais dos campos mesmo que tenham sido preenchidos via autopreenchimento (autofill) do browser sem disparar `onChange`. O cadastro público DEVE criar um tenant isolado: o novo usuário recebe `tenant_id` igual ao seu próprio `id`, tornando-o dono de uma empresa independente sem acesso aos dados de outras contas.
 
 #### Scenario: Validação de senhas divergentes
 
@@ -25,19 +25,29 @@ O formulário DEVE conter os campos: nome completo (obrigatório), nome da empre
 - **WHEN** usuário digita 14 dígitos no campo CPF/CNPJ
 - **THEN** sistema formata automaticamente como `00.000.000/0001-00`
 
+#### Scenario: Cadastro cria tenant isolado
+
+- **WHEN** usuário completa o cadastro público com sucesso
+- **THEN** a conta criada não compartilha produtos, movimentações nem equipe com nenhuma outra conta do sistema
+
 ### Requirement: Proteção anti-robô no cadastro
 
-O formulário DEVE incluir reCAPTCHA v2 ("Não sou robô") antes do botão CADASTRAR. O botão DEVE permanecer desabilitado até que o reCAPTCHA seja validado.
+O formulário DEVE incluir reCAPTCHA v2 ("Não sou robô") antes do botão CADASTRAR quando `VITE_RECAPTCHA_SITE_KEY` estiver configurado. O botão DEVE permanecer desabilitado até que o reCAPTCHA seja validado. O backend DEVE verificar o token reCAPTCHA apenas quando `RECAPTCHA_SECRET` estiver configurado; sem essa variável, o cadastro DEVE prosseguir sem validação de CAPTCHA.
 
 #### Scenario: Bloqueio sem reCAPTCHA
 
-- **WHEN** usuário preenche todos os campos mas não completa o reCAPTCHA
+- **WHEN** usuário preenche todos os campos mas não completa o reCAPTCHA (e reCAPTCHA está configurado)
 - **THEN** botão CADASTRAR permanece desabilitado e o envio é impedido
 
 #### Scenario: Habilitação após reCAPTCHA
 
 - **WHEN** usuário completa o desafio reCAPTCHA com sucesso
 - **THEN** botão CADASTRAR é habilitado
+
+#### Scenario: Cadastro sem reCAPTCHA configurado
+
+- **WHEN** `RECAPTCHA_SECRET` não está configurado no backend e usuário preenche todos os campos e clica em CADASTRAR
+- **THEN** sistema aceita o cadastro sem exigir token de CAPTCHA
 
 ### Requirement: Resultado do cadastro
 
