@@ -152,7 +152,7 @@ export default function Login({ darkMode, setDarkMode }) {
                 to="/forgot-password"
                 className="text-purple-600 dark:text-purple-400 hover:underline"
               >
-                Esqueci a senha
+                Esqueci minha senha
               </Link>
               <Link
                 to="/register"

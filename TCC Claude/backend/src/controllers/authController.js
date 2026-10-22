@@ -2,6 +2,7 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const axios = require('axios');
 const User = require('../models/User');
+const { validarEmailRecuperacao, normalizar } = require('../utils/emailRecuperacao');
 
 async function verifyRecaptcha(token) {
   const response = await axios.post(
@@ -12,11 +13,19 @@ async function verifyRecaptcha(token) {
 
 async function register(req, res) {
   try {
-    const { nome, nome_empresa, cpf_cnpj, email, senha, recaptchaToken } = req.body;
+    const { nome, nome_empresa, cpf_cnpj, email, senha, email_recuperacao, email_recuperacao_confirmacao, recaptchaToken } = req.body;
     const recaptchaEnabled = !!process.env.RECAPTCHA_SECRET;
 
     if (!nome || !nome_empresa || !cpf_cnpj || !email || !senha || (recaptchaEnabled && !recaptchaToken)) {
       return res.status(400).json({ message: 'Preencha todos os campos.' });
+    }
+
+    if (normalizar(email_recuperacao) !== normalizar(email_recuperacao_confirmacao)) {
+      return res.status(400).json({ message: 'Os e-mails de recuperação não coincidem.', field: 'email_recuperacao_confirmacao' });
+    }
+    const recuperacao = validarEmailRecuperacao(email_recuperacao, email);
+    if (!recuperacao.ok) {
+      return res.status(400).json({ message: recuperacao.message, field: 'email_recuperacao', sugestao: recuperacao.sugestao });
     }
 
     if (recaptchaEnabled) {
@@ -37,7 +46,7 @@ async function register(req, res) {
     }
 
     const senha_hash = await bcrypt.hash(senha, 12);
-    await User.create({ nome, nome_empresa, cpf_cnpj, email, senha_hash });
+    await User.create({ nome, nome_empresa, cpf_cnpj, email, senha_hash, email_recuperacao: recuperacao.email });
 
     return res.status(201).json({ message: 'Conta criada com sucesso!' });
   } catch (err) {
@@ -81,4 +90,4 @@ async function login(req, res) {
   }
 }
 
-module.exports = { register, login };
+module.exports = { register, login, verifyRecaptcha };

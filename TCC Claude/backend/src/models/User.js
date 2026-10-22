@@ -48,11 +48,11 @@ async function findByCpfCnpj(cpfCnpj) {
   return rows[0] || null;
 }
 
-async function create({ nome, nome_empresa, cpf_cnpj, email, senha_hash }) {
+async function create({ nome, nome_empresa, cpf_cnpj, email, senha_hash, email_recuperacao = null }) {
   const { rows } = await db.query(
-    `INSERT INTO usuarios (nome, nome_empresa, cpf_cnpj, email, senha_hash)
-     VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-    [nome, nome_empresa, cpf_cnpj, email.toLowerCase().trim(), senha_hash]
+    `INSERT INTO usuarios (nome, nome_empresa, cpf_cnpj, email, senha_hash, email_recuperacao)
+     VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+    [nome, nome_empresa, cpf_cnpj, email.toLowerCase().trim(), senha_hash, email_recuperacao]
   );
   const id = rows[0].id;
   await db.query(`UPDATE usuarios SET tenant_id = $1 WHERE id = $1`, [id]);

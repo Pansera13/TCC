@@ -2,6 +2,7 @@ import ReCAPTCHA from 'react-google-recaptcha';
 import { useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { register as apiRegister } from '../services/api';
+import { aplicarSugestao, normalizarEmail, problemaEmailRecuperacao } from '../utils/emailRecuperacao';
 
 function formatCpfCnpj(value) {
   const digits = value.replace(/\D/g, '');
@@ -20,9 +21,10 @@ function formatCpfCnpj(value) {
 
 export default function Register({ darkMode, setDarkMode }) {
   const [form, setForm] = useState({
-    nome: '', nome_empresa: '', cpf_cnpj: '', email: '', senha: '', confirmar: '',
+    nome: '', nome_empresa: '', cpf_cnpj: '', email: '', email_recuperacao: '', email_recuperacao_confirmacao: '', senha: '', confirmar: '',
   });
   const [errors, setErrors] = useState({});
+  const [sugestao, setSugestao] = useState('');
   const [recaptchaToken, setRecaptchaToken] = useState('');
   const [loading, setLoading] = useState(false);
   const [apiError, setApiError] = useState('');
@@ -39,6 +41,7 @@ export default function Register({ darkMode, setDarkMode }) {
       setForm(f => ({ ...f, [name]: value }));
     }
     setErrors(e => ({ ...e, [name]: '' }));
+    if (name === 'email_recuperacao') setSugestao('');
   }
 
   function validate() {
@@ -48,6 +51,13 @@ export default function Register({ darkMode, setDarkMode }) {
     if (!form.cpf_cnpj.trim()) e.cpf_cnpj = 'Campo obrigatório.';
     if (!form.email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email))
       e.email = 'E-mail inválido.';
+    const problema = problemaEmailRecuperacao(form.email_recuperacao, form.email);
+    if (problema) {
+      e.email_recuperacao = problema.message;
+      setSugestao(problema.sugestao || '');
+    } else if (normalizarEmail(form.email_recuperacao) !== normalizarEmail(form.email_recuperacao_confirmacao)) {
+      e.email_recuperacao_confirmacao = 'Os e-mails de recuperação não coincidem.';
+    }
     if (!form.senha) e.senha = 'Campo obrigatório.';
     else if (form.senha.length < 8) e.senha = 'Mínimo 8 caracteres.';
     if (form.senha !== form.confirmar) e.confirmar = 'As senhas não coincidem.';
@@ -70,6 +80,8 @@ export default function Register({ darkMode, setDarkMode }) {
         nome_empresa: form.nome_empresa,
         cpf_cnpj: form.cpf_cnpj,
         email: form.email,
+        email_recuperacao: form.email_recuperacao,
+        email_recuperacao_confirmacao: form.email_recuperacao_confirmacao,
         senha: form.senha,
         recaptchaToken,
       });
@@ -78,6 +90,7 @@ export default function Register({ darkMode, setDarkMode }) {
       const msg = err.response?.data?.message || 'Erro ao cadastrar.';
       const field = err.response?.data?.field;
       if (field) setErrors(e => ({ ...e, [field]: msg }));
+      if (field === 'email_recuperacao') setSugestao(err.response?.data?.sugestao || '');
       else setApiError(msg);
       recaptchaRef.current?.reset();
       setRecaptchaToken('');
@@ -131,11 +144,34 @@ export default function Register({ darkMode, setDarkMode }) {
               {errors.email && <p className="text-xs text-red-500 mt-1">{errors.email}</p>}
             </div>
 
+            <div>
+              <label className="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">E-mail de recuperação</label>
+              <input name="email_recuperacao" type="email" value={form.email_recuperacao} onChange={handleChange} placeholder="outro@gmail.com" className={inputClass('email_recuperacao')} />
+              <p className="text-xs text-gray-400 mt-1">Usado para recuperar a senha. Deve ser diferente do e-mail de login.</p>
+              {errors.email_recuperacao && <p className="text-xs text-red-500 mt-1">{errors.email_recuperacao}</p>}
+              {sugestao && (
+                <p className="text-xs text-gray-600 dark:text-gray-300 mt-1">
+                  Você quis dizer <strong>{sugestao}</strong>?{' '}
+                  <button type="button" onClick={() => {
+                    setForm(f => ({ ...f, email_recuperacao: aplicarSugestao(f.email_recuperacao, sugestao) }));
+                    setSugestao('');
+                    setErrors(e => ({ ...e, email_recuperacao: '' }));
+                  }} className="text-purple-600 dark:text-purple-400 hover:underline font-medium">Corrigir</button>
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">Confirmar e-mail de recuperação</label>
+              <input name="email_recuperacao_confirmacao" type="email" value={form.email_recuperacao_confirmacao} onChange={handleChange} onPaste={e => e.preventDefault()} placeholder="Digite novamente" className={inputClass('email_recuperacao_confirmacao')} />
+              {errors.email_recuperacao_confirmacao && <p className="text-xs text-red-500 mt-1">{errors.email_recuperacao_confirmacao}</p>}
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">Senha</label>
                 <div className="relative">
-                  <input name="senha" type={showSenha ? 'text' : 'password'} value={form.senha} onChange={handleChange} placeholder="••••••••" className={inputClass('senha') + ' pr-10'} />
+                  <input name="senha" type={showSenha ? 'text' : 'password'} autoComplete="new-password" value={form.senha} onChange={handleChange} placeholder="••••••••" className={inputClass('senha') + ' pr-10'} />
                   <button type="button" onClick={() => setShowSenha(!showSenha)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm" tabIndex={-1}>{showSenha ? '🙈' : '👁️'}</button>
                 </div>
                 {errors.senha && <p className="text-xs text-red-500 mt-1">{errors.senha}</p>}
@@ -143,7 +179,7 @@ export default function Register({ darkMode, setDarkMode }) {
               <div>
                 <label className="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">Confirmar</label>
                 <div className="relative">
-                  <input name="confirmar" type={showConfirmar ? 'text' : 'password'} value={form.confirmar} onChange={handleChange} onPaste={e => e.preventDefault()} placeholder="••••••••" className={inputClass('confirmar') + ' pr-10'} />
+                  <input name="confirmar" type={showConfirmar ? 'text' : 'password'} autoComplete="new-password" value={form.confirmar} onChange={handleChange} onPaste={e => e.preventDefault()} placeholder="••••••••" className={inputClass('confirmar') + ' pr-10'} />
                   <button type="button" onClick={() => setShowConfirmar(!showConfirmar)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm" tabIndex={-1}>{showConfirmar ? '🙈' : '👁️'}</button>
                 </div>
                 {errors.confirmar && <p className="text-xs text-red-500 mt-1">{errors.confirmar}</p>}

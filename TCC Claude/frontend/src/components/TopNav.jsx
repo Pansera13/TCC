@@ -1,4 +1,8 @@
+import { useEffect, useState } from 'react';
 import ThemeToggle from './ThemeToggle';
+import NotificationBell from './NotificationBell';
+import EmailRecuperacaoModal from './EmailRecuperacaoModal';
+import { getProfile } from '../services/api';
 import { ROLES } from '../utils/roles';
 
 // Barra de navegação superior fixa (altura máxima de 1,5 cm).
@@ -13,7 +17,18 @@ export default function TopNav({
   newName, setNewName, onSaveName,
   onLogout,
 }) {
+  const [perfil, setPerfil] = useState(null); // { conta_principal, email_recuperacao }
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [recarregarNotificacoes, setRecarregarNotificacoes] = useState(0);
+
+  useEffect(() => {
+    getProfile().then(({ data }) => setPerfil(data)).catch(() => { /* sem o perfil, o item de e-mail simplesmente não aparece */ });
+  }, []);
+
+  const abrirEmailRecuperacao = () => { setShowProfileMenu(false); setShowEmailModal(true); };
+
   return (
+    <>
     <nav
       className="relative z-40 flex items-center gap-2 h-14 px-3 bg-white dark:bg-gray-900 shadow-sm border-b border-gray-100 dark:border-gray-800 shrink-0"
       style={{ maxHeight: '1.5cm' }}
@@ -46,6 +61,8 @@ export default function TopNav({
       {/* Tema + perfil */}
       <div className="flex items-center gap-3 shrink-0">
         <ThemeToggle isDark={darkMode} onToggle={onToggleDark} />
+
+        <NotificationBell usuarioId={user?.id} recarregarEm={recarregarNotificacoes} onAcao={(acao) => { if (acao === 'abrir-email-recuperacao') abrirEmailRecuperacao(); }} />
 
         <div className="relative" ref={profileRef}>
           <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={onPhotoChange} />
@@ -97,6 +114,14 @@ export default function TopNav({
                   >
                     ✏️ Alterar nome
                   </button>
+                  {perfil?.conta_principal && (
+                    <button
+                      onClick={abrirEmailRecuperacao}
+                      className="w-full flex items-center gap-3 px-4 py-3 text-base text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition text-left"
+                    >
+                      ✉️ E-mail de recuperação
+                    </button>
+                  )}
                   <div className="border-t border-gray-100 dark:border-gray-700" />
                   <button
                     onClick={onLogout}
@@ -111,5 +136,17 @@ export default function TopNav({
         </div>
       </div>
     </nav>
+
+    {showEmailModal && (
+      <EmailRecuperacaoModal
+        emailAtual={perfil?.email_recuperacao}
+        onClose={() => setShowEmailModal(false)}
+        onSaved={(email) => {
+          setPerfil(p => ({ ...p, email_recuperacao: email }));
+          setRecarregarNotificacoes(n => n + 1);
+        }}
+      />
+    )}
+    </>
   );
 }

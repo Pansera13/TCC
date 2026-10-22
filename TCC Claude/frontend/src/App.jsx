@@ -5,6 +5,7 @@ import SocialLinks from './components/SocialLinks';
 import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import ForgotPassword from './pages/ForgotPassword';
 
 class ErrorBoundary extends Component {
   constructor(props) {
@@ -65,6 +66,7 @@ export default function App() {
           <Routes>
             <Route path="/" element={<Login darkMode={darkMode} setDarkMode={setDarkMode} />} />
             <Route path="/register" element={<Register darkMode={darkMode} setDarkMode={setDarkMode} />} />
+            <Route path="/forgot-password" element={<ForgotPassword darkMode={darkMode} setDarkMode={setDarkMode} />} />
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard darkMode={darkMode} setDarkMode={setDarkMode} /></ProtectedRoute>} />
           </Routes>
           <SocialLinks />

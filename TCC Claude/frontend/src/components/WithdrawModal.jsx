@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { withdrawProduct } from '../services/api';
 
-export default function WithdrawModal({ product, onClose, onWithdrawn }) {
+export default function WithdrawModal({ product, onClose, onWithdrawn, onError }) {
   const [quantidade, setQuantidade] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -31,6 +31,7 @@ export default function WithdrawModal({ product, onClose, onWithdrawn }) {
       onClose();
     } catch (err) {
       setError(err.response?.data?.message || 'Erro ao registrar retirada.');
+      onError?.();
     } finally {
       setLoading(false);
     }

@@ -31,6 +31,23 @@ export const login = (identifier, senha) =>
 export const register = (data) =>
   api.post('/api/auth/register', data);
 
+// Recuperação de senha (sem sessão)
+export const buscarContaRecuperacao = (identificador, recaptchaToken) =>
+  api.post('/api/auth/recuperacao/buscar', { identificador, recaptchaToken });
+export const enviarCodigoRecuperacao = (busca_token) =>
+  api.post('/api/auth/recuperacao/enviar-codigo', { busca_token });
+export const verificarCodigoRecuperacao = (busca_token, codigo) =>
+  api.post('/api/auth/recuperacao/verificar-codigo', { busca_token, codigo });
+export const redefinirSenhaRecuperacao = (reset_token, nova_senha) =>
+  api.post('/api/auth/recuperacao/redefinir-senha', { reset_token, nova_senha });
+
+// Perfil e notificações
+export const getProfile = () => api.get('/api/profile');
+export const updateEmailRecuperacao = (data) => api.put('/api/profile/email-recuperacao', data);
+export const listNotificacoes = () => api.get('/api/notificacoes');
+export const marcarNotificacoesLidas = () => api.post('/api/notificacoes/marcar-lidas');
+export const dispensarNotificacao = (id) => api.post(`/api/notificacoes/${id}/dispensar`);
+
 export const listProducts = () => api.get('/api/products');
 export const lookupBarcode = (codigo) => api.get(`/api/products/barcode/${encodeURIComponent(codigo)}`);
 export const createProduct = (data) => api.post('/api/products', data);

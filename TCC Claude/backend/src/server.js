@@ -8,6 +8,7 @@ const movementRoutes = require('./routes/movements');
 const reportRoutes = require('./routes/reports');
 const userRoutes = require('./routes/users');
 const profileRoutes = require('./routes/profile');
+const notificacaoRoutes = require('./routes/notificacoes');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -23,6 +24,7 @@ app.use('/api/movements', movementRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/profile', profileRoutes);
+app.use('/api/notificacoes', notificacaoRoutes);
 
 // JSON error handler — retorna mensagem legível em vez de HTML
 app.use((err, req, res, next) => { // eslint-disable-line no-unused-vars

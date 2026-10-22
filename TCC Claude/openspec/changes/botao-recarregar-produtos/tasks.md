@@ -9,7 +9,8 @@
 ## 2. Recarga após erro
 
 - [ ] 2.1 `WithdrawModal.jsx`: nova prop opcional `onError` chamada depois de exibir a mensagem de erro; no Dashboard, passar uma função que recarrega a lista em silêncio. Verificar no navegador forçando um erro (retirar mais do que o servidor tem, depois de reduzir a quantidade direto no Supabase): o modal mostra a mensagem e a lista passa à quantidade real; uma retirada bem-sucedida não dispara recarga extra.
-- [ ] 2.2 Se o modal de Entrada da change `adicionar-cargo-socio-e-arquivar-produtos` já existir, aplicar a mesma prop `onError` e verificar um erro de entrada no navegador; se ainda não existir, registrar aqui que a integração fica para essa change.
+- [x] 2.2 Se o modal de Entrada da change `adicionar-cargo-socio-e-arquivar-produtos` já existir, aplicar a mesma prop `onError` e verificar um erro de entrada no navegador; se ainda não existir, registrar aqui que a integração fica para essa change.
+  - Registro: o modal de Entrada ainda não existe; a integração (`onError={fetchProducts}`, como no `WithdrawModal`) fica para a change `adicionar-cargo-socio-e-arquivar-produtos`.
 
 ## 3. Integração
 

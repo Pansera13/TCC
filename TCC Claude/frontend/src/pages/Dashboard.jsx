@@ -6,6 +6,7 @@ import WithdrawModal from '../components/WithdrawModal';
 import AddUserModal from '../components/AddUserModal';
 import TopNav from '../components/TopNav';
 import Pagination from '../components/Pagination';
+import RecarregarProdutos from '../components/RecarregarProdutos';
 import MovementsHistory from '../components/MovementsHistory';
 import Reports from '../components/Reports';
 import { groupProductsByCategory, paginate, TABLE_PAGE_SIZE } from '../utils/products';
@@ -50,6 +51,11 @@ export default function Dashboard({ darkMode, setDarkMode }) {
   const [products, setProducts] = useState([]);
   const [loadingProducts, setLoadingProducts] = useState(false);
   const produtosCarregadosRef = useRef(false);
+  const requisicaoProdutosRef = useRef(0);
+  const recarregandoRef = useRef(false);
+  const erroRecargaTimerRef = useRef(null);
+  const [recarregando, setRecarregando] = useState(false);
+  const [erroRecarga, setErroRecarga] = useState(false);
   const [search, setSearch] = useState('');
   const [layoutProdutos, setLayoutProdutos] = useState(() => localStorage.getItem('sf_layout') || 'lista');
   const [tamanhoLayout, setTamanhoLayout] = useState(() => localStorage.getItem('sf_tamanho') || 'm');
@@ -92,16 +98,40 @@ export default function Dashboard({ darkMode, setDarkMode }) {
   ];
 
   // A tela "Carregando…" só aparece na primeira leitura; as seguintes (polling, salvar, etc.) atualizam em silêncio
-  async function fetchProducts() {
-    if (!produtosCarregadosRef.current) setLoadingProducts(true);
+  // Busca única: devolve false se falhou; respostas mais antigas que a última requisição são descartadas
+  async function buscarProdutos() {
+    const id = ++requisicaoProdutosRef.current;
     try {
       const { data } = await api.get('/api/products');
-      setProducts(data);
-      produtosCarregadosRef.current = true;
+      if (id === requisicaoProdutosRef.current) {
+        setProducts(data);
+        produtosCarregadosRef.current = true;
+      }
+      return true;
     } catch {
-      // silently fail
-    } finally {
-      setLoadingProducts(false);
+      return false;
+    }
+  }
+
+  async function fetchProducts() {
+    if (!produtosCarregadosRef.current) setLoadingProducts(true);
+    await buscarProdutos();
+    setLoadingProducts(false);
+  }
+
+  // Recarga a pedido do usuário: mostra o estado do botão e avisa se falhar
+  async function recarregarProdutos() {
+    if (recarregandoRef.current) return;
+    recarregandoRef.current = true;
+    clearTimeout(erroRecargaTimerRef.current);
+    setErroRecarga(false);
+    setRecarregando(true);
+    const ok = await buscarProdutos();
+    recarregandoRef.current = false;
+    setRecarregando(false);
+    if (!ok) {
+      setErroRecarga(true);
+      erroRecargaTimerRef.current = setTimeout(() => setErroRecarga(false), 4000);
     }
   }
 
@@ -119,6 +149,7 @@ export default function Dashboard({ darkMode, setDarkMode }) {
   }
 
   useEffect(() => { fetchProducts(); }, []);
+  useEffect(() => () => clearTimeout(erroRecargaTimerRef.current), []);
 
   // Sincroniza avatar com o banco ao abrir o dashboard
   useEffect(() => {
@@ -359,9 +390,12 @@ export default function Dashboard({ darkMode, setDarkMode }) {
             <h2 className="font-semibold text-gray-800 dark:text-white text-sm">Produtos Esgotados</h2>
             <span className="ml-1 text-xs text-gray-400 dark:text-gray-500">({esgotados.length})</span>
           </div>
-          <button onClick={() => setActiveNav('dashboard')} className="text-xs text-purple-600 dark:text-purple-400 hover:underline">
-            ← Voltar ao Início
-          </button>
+          <div className="flex items-center gap-3">
+            <RecarregarProdutos onClick={recarregarProdutos} recarregando={recarregando} erro={erroRecarga} />
+            <button onClick={() => setActiveNav('dashboard')} className="text-xs text-purple-600 dark:text-purple-400 hover:underline">
+              ← Voltar ao Início
+            </button>
+          </div>
         </div>
 
         {esgotados.length === 0 ? (
@@ -751,6 +785,8 @@ export default function Dashboard({ darkMode, setDarkMode }) {
             )}
           </div>
 
+          <RecarregarProdutos onClick={recarregarProdutos} recarregando={recarregando} erro={erroRecarga} />
+
           {/* New product */}
           <button onClick={() => setShowModal(true)}
             className="px-4 py-2 text-xs bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition font-medium whitespace-nowrap shrink-0">
@@ -945,7 +981,9 @@ export default function Dashboard({ darkMode, setDarkMode }) {
         <WithdrawModal
           product={withdrawItem}
           onClose={() => setWithdrawItem(null)}
+          onError={fetchProducts}
           onWithdrawn={(qty) => {
+              requisicaoProdutosRef.current++; // descarta buscas em andamento: já são mais antigas que esta retirada
               setProducts(prev => prev.map(p =>
                 p.id === withdrawItem.id ? { ...p, quantidade: parseFloat(p.quantidade) - qty } : p
               ));
