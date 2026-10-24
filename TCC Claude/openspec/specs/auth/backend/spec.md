@@ -8,17 +8,22 @@ API REST de autenticação do StockFlow: registra usuários, autentica credencia
 
 ### Requirement: Rota de cadastro
 
-`POST /api/auth/register` DEVE aceitar nome completo, nome da empresa, CPF ou CNPJ, e-mail e senha. Senha DEVE ser armazenada como hash bcrypt. CPF/CNPJ e e-mail DEVEM ser únicos. DEVE retornar 201 em sucesso ou 409 em duplicidade.
+`POST /api/auth/register` DEVE aceitar nome completo, nome da empresa, CPF ou CNPJ, e-mail, e-mail de recuperação (`email_recuperacao`), sua confirmação (`email_recuperacao_confirmacao`) e senha. Senha DEVE ser armazenada como hash bcrypt. CPF/CNPJ e e-mail DEVEM ser únicos; o e-mail de recuperação PODE se repetir entre contas. O e-mail de recuperação DEVE ser validado conforme a spec `auth/register`. DEVE retornar 201 em sucesso, 400 para e-mail de recuperação inválido ou ausente e 409 em duplicidade.
 
 #### Scenario: Cadastro bem-sucedido
 
-- **WHEN** rota recebe payload válido com dados únicos
-- **THEN** retorna HTTP 201 com mensagem de confirmação e usuário salvo no banco com senha_hash
+- **WHEN** rota recebe payload válido com dados únicos e e-mail de recuperação válido
+- **THEN** retorna HTTP 201 com mensagem de confirmação e usuário salvo no banco com senha_hash e `email_recuperacao`
 
 #### Scenario: E-mail ou CPF/CNPJ duplicado
 
 - **WHEN** rota recebe e-mail ou CPF/CNPJ já existente no banco
 - **THEN** retorna HTTP 409 com mensagem indicando o campo duplicado
+
+#### Scenario: E-mail de recuperação inválido
+
+- **WHEN** rota recebe `email_recuperacao` ausente, igual ao e-mail de login, de provedor não permitido ou diferente da confirmação
+- **THEN** retorna HTTP 400 com `field` igual a `email_recuperacao` e, quando houver domínio parecido com um permitido, a sugestão de correção
 
 ### Requirement: Rota de login
 
@@ -34,47 +39,29 @@ API REST de autenticação do StockFlow: registra usuários, autentica credencia
 - **WHEN** rota recebe identificador ou senha incorretos
 - **THEN** retorna HTTP 401 com mensagem "Usuário ou senha inválidos"
 
-### Requirement: Rota de solicitação de recuperação de senha
+### Requirement: Rotas de recuperação de senha
 
-`POST /api/auth/forgot-password` DEVE aceitar e-mail e CPF/CNPJ, verificar se correspondem ao mesmo cadastro, gerar código de 6 dígitos com validade de 15 minutos e enviar por e-mail. DEVE retornar 200 mesmo quando os dados não são encontrados (para não revelar cadastros).
+O backend DEVE expor, sem exigir token de sessão, as rotas `POST /api/auth/recuperacao/buscar`, `POST /api/auth/recuperacao/enviar-codigo`, `POST /api/auth/recuperacao/verificar-codigo` e `POST /api/auth/recuperacao/redefinir-senha`. A busca devolve um token curto e assinado de busca e os dados mascarados; o envio, a verificação e a redefinição exigem esse token (ou o token de redefinição devolvido pela verificação). Os erros DEVEM seguir o comportamento da spec `auth/forgot-password`: 404 conta não encontrada, 403 conta de equipe ou desativada, 422 conta sem e-mail de recuperação, 400 código inválido ou expirado, 429 limite excedido, 502 falha no envio.
 
-#### Scenario: Dados encontrados
+#### Scenario: Busca devolve só dados mascarados
 
-- **WHEN** rota recebe e-mail e CPF/CNPJ de um cadastro existente
-- **THEN** gera código de 6 dígitos, salva com expiração de 15 minutos e envia e-mail com o código, retornando HTTP 200
+- **WHEN** a busca encontra uma conta principal ativa com e-mail de recuperação
+- **THEN** responde HTTP 200 com token de busca, nome mascarado e e-mail de recuperação mascarado, sem nenhum dado completo da conta
 
-#### Scenario: Dados não encontrados
+#### Scenario: Envio sem token de busca
 
-- **WHEN** rota recebe combinação de e-mail e CPF/CNPJ sem correspondência
-- **THEN** retorna HTTP 200 sem revelar que os dados não existem
+- **WHEN** `enviar-codigo` é chamado sem token de busca válido ou expirado
+- **THEN** responde HTTP 401 e não envia e-mail
 
-### Requirement: Rota de verificação de código
+#### Scenario: Redefinição com token usado
 
-`POST /api/auth/verify-code` DEVE aceitar e-mail e código, validar se o código está correto e não expirado. DEVE retornar token temporário de redefinição em caso de sucesso.
-
-#### Scenario: Código válido
-
-- **WHEN** rota recebe e-mail e código correto dentro do prazo de 15 minutos
-- **THEN** retorna HTTP 200 com token temporário de redefinição
-
-#### Scenario: Código inválido ou expirado
-
-- **WHEN** rota recebe código errado ou expirado
-- **THEN** retorna HTTP 400 com mensagem "Código inválido ou expirado"
-
-### Requirement: Rota de redefinição de senha
-
-`POST /api/auth/reset-password` DEVE aceitar token temporário e nova senha, validar o token, atualizar a senha com novo hash bcrypt e invalidar o código usado.
+- **WHEN** `redefinir-senha` recebe um token de redefinição cujo código já foi usado ou invalidado
+- **THEN** responde HTTP 400 com "Token inválido ou expirado" e não altera a senha
 
 #### Scenario: Redefinição bem-sucedida
 
-- **WHEN** rota recebe token temporário válido e nova senha
-- **THEN** senha é atualizada com novo hash bcrypt, código é invalidado e retorna HTTP 200
-
-#### Scenario: Token inválido
-
-- **WHEN** rota recebe token temporário inválido ou já utilizado
-- **THEN** retorna HTTP 400 com mensagem "Token inválido ou expirado"
+- **WHEN** `redefinir-senha` recebe token válido e nova senha com pelo menos 8 caracteres
+- **THEN** a senha é atualizada com novo hash bcrypt, o código é invalidado e responde HTTP 200
 
 ### Requirement: Middleware de autenticação JWT
 

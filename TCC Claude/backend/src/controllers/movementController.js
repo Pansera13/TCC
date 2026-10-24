@@ -1,4 +1,5 @@
 const db = require('../db');
+const { can } = require('../utils/permissoes');
 
 const TIPOS = ['entrada', 'saida', 'edicao', 'remocao'];
 const COLUNAS_ORDEM = new Set(['created_at', 'product_nome', 'tipo', 'quantidade', 'user_nome', 'origem']);
@@ -53,6 +54,12 @@ async function listMovements(req, res) {
   }
 
   where.push(`tenant_id = ${add(req.user.tenant_id)}`);
+
+  // Funcionário só vê as próprias movimentações
+  if (!can(req.user.role, 'movimentacao:ver-todas')) {
+    where.push(`user_id = ${add(req.user.id)}`);
+  }
+
   const filtro = `WHERE ${where.join(' AND ')}`;
 
   const { rows: contagem } = await db.query(`SELECT COUNT(*)::int AS total FROM movements ${filtro}`, params);

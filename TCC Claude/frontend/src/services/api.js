@@ -49,10 +49,14 @@ export const marcarNotificacoesLidas = () => api.post('/api/notificacoes/marcar-
 export const dispensarNotificacao = (id) => api.post(`/api/notificacoes/${id}/dispensar`);
 
 export const listProducts = () => api.get('/api/products');
+export const listArchivedProducts = () => api.get('/api/products?arquivados=1');
 export const lookupBarcode = (codigo) => api.get(`/api/products/barcode/${encodeURIComponent(codigo)}`);
 export const createProduct = (data) => api.post('/api/products', data);
 export const deleteProduct = (id) => api.delete(`/api/products/${id}`);
 export const withdrawProduct = (id, quantidade) => api.post(`/api/products/${id}/withdraw`, { quantidade });
+export const entryProduct = (id, quantidade) => api.post(`/api/products/${id}/entry`, { quantidade });
+export const archiveProduct = (id) => api.post(`/api/products/${id}/archive`);
+export const restoreProduct = (id) => api.post(`/api/products/${id}/restore`);
 
 export const listMovements = (params) => api.get('/api/movements', { params });
 export const listMovementUsers = () => api.get('/api/movements/users');

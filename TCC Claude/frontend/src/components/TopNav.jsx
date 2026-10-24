@@ -9,7 +9,7 @@ import { ROLES } from '../utils/roles';
 // O estado do menu de perfil fica no Dashboard e chega por props.
 export default function TopNav({
   items, activeNav, onSelect,
-  user, isAdmin,
+  user,
   darkMode, onToggleDark,
   profileRef, photoInputRef, onPhotoChange,
   showProfileMenu, setShowProfileMenu,
@@ -79,7 +79,7 @@ export default function TopNav({
             </div>
             <div className="hidden lg:block min-w-0 leading-tight">
               <p className="text-sm font-medium text-gray-800 dark:text-white truncate max-w-[8rem]">{user?.nome}</p>
-              <p className="text-xs text-gray-400">{ROLES[user?.role] || (isAdmin ? 'Administrador' : 'Operador')}</p>
+              <p className="text-xs text-gray-400">{ROLES[user?.role] || user?.role || '—'}</p>
             </div>
           </button>
 

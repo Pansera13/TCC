@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken');
 const axios = require('axios');
 const User = require('../models/User');
 const { validarEmailRecuperacao, normalizar } = require('../utils/emailRecuperacao');
+const { permissoesDoCargo } = require('../utils/permissoes');
 
 async function verifyRecaptcha(token) {
   const response = await axios.post(
@@ -83,7 +84,15 @@ async function login(req, res) {
       { expiresIn: '8h' }
     );
 
-    return res.status(200).json({ token, nome: user.nome, role: user.role || 'admin', id: user.id, avatar_url: user.avatar_url || null });
+    const role = user.role || 'admin';
+    return res.status(200).json({
+      token,
+      nome: user.nome,
+      role,
+      id: user.id,
+      avatar_url: user.avatar_url || null,
+      permissoes: permissoesDoCargo(role),
+    });
   } catch (err) {
     console.error('login error:', err);
     return res.status(500).json({ message: 'Erro interno do servidor.' });

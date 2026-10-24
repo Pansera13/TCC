@@ -68,7 +68,7 @@ export default function Login({ darkMode, setDarkMode }) {
     setLoading(true);
     try {
       const { data } = await apiLogin(identifier.trim(), senha);
-      loginUser(data.token, data.nome, data.role, data.id, data.avatar_url);
+      loginUser(data.token, data.nome, data.role, data.id, data.avatar_url, data.permissoes);
       navigate('/dashboard');
     } catch (err) {
       setError(err.response?.data?.message || 'Usuário ou senha inválidos.');

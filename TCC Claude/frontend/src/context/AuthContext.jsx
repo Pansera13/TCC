@@ -13,8 +13,8 @@ export function AuthProvider({ children }) {
     return stored ? JSON.parse(stored) : null;
   });
 
-  function loginUser(token, nome, role, id, avatar_url) {
-    const userData = { nome, role: role || 'admin', id, avatarUrl: avatar_url || null };
+  function loginUser(token, nome, role, id, avatar_url, permissoes) {
+    const userData = { nome, role: role || 'admin', id, avatarUrl: avatar_url || null, permissoes: permissoes || [] };
     sessionStorage.setItem('token', token);
     sessionStorage.setItem('user', JSON.stringify(userData));
     setUser(userData);
@@ -32,8 +32,12 @@ export function AuthProvider({ children }) {
     setUser(updated);
   }
 
+  function can(permissao) {
+    return (user?.permissoes || []).includes(permissao);
+  }
+
   return (
-    <AuthContext.Provider value={{ user, loginUser, logoutUser, updateUser }}>
+    <AuthContext.Provider value={{ user, loginUser, logoutUser, updateUser, can }}>
       {children}
     </AuthContext.Provider>
   );

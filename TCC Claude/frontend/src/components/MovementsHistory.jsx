@@ -5,6 +5,7 @@ import SortTh from './SortTh';
 import { zebra } from '../utils/tables';
 import { useFitRows } from '../utils/useFitRows';
 import { proximaOrdem } from '../utils/sort';
+import { useAuth } from '../context/AuthContext';
 
 const PAGE_SIZE_INICIAL = 8;
 const FILTROS_VAZIOS = { user: '', tipo: '', q: '', from: '', to: '' };
@@ -17,7 +18,7 @@ const ACOES = {
 };
 const ACAO_DESCONHECIDA = { cls: 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400' };
 
-const CAMPOS = { nome: 'Nome', quantidade: 'Quantidade', unidade: 'Unidade', categoria: 'Categoria', fornecedor: 'Fornecedor' };
+const CAMPOS = { nome: 'Nome', quantidade: 'Quantidade', unidade: 'Unidade', categoria: 'Categoria', fornecedor: 'Fornecedor', arquivado: 'Arquivado' };
 
 function formatDate(iso) {
   if (!iso) return '—';
@@ -25,7 +26,9 @@ function formatDate(iso) {
 }
 
 function valor(v) {
-  return v === null || v === undefined || v === '' ? '—' : String(v);
+  if (v === null || v === undefined || v === '') return '—';
+  if (typeof v === 'boolean') return v ? 'Sim' : 'Não';
+  return String(v);
 }
 
 const inputCls =
@@ -33,6 +36,8 @@ const inputCls =
   'text-gray-700 dark:text-gray-200 outline-none focus:border-purple-400 dark:focus:border-purple-500';
 
 export default function MovementsHistory() {
+  const { can } = useAuth();
+  const podeVerTodas = can('movimentacao:ver-todas');
   const [resp, setResp] = useState({ key: null, dados: { items: [], total: 0 }, erro: '' });
   const [filtros, setFiltros] = useState(FILTROS_VAZIOS);
   const [busca, setBusca] = useState('');
@@ -50,10 +55,11 @@ export default function MovementsHistory() {
   const loading = !periodoInvalido && resp.key !== key;
   const { dados, erro } = resp;
 
-  // Opções do filtro de usuário
+  // Opções do filtro de usuário (só busca se puder ver todas)
   useEffect(() => {
+    if (!podeVerTodas) return;
     listMovementUsers().then(({ data }) => setUsuarios(data)).catch(() => {});
-  }, []);
+  }, [podeVerTodas]);
 
   // Produto: espera o usuário parar de digitar
   useEffect(() => {
@@ -103,13 +109,22 @@ export default function MovementsHistory() {
 
   return (
     <div className="flex flex-col flex-1 min-h-0">
+      {!podeVerTodas && (
+        <div className="px-4 pt-3 pb-1">
+          <p className="text-xs text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 rounded-lg px-3 py-2">
+            Mostrando apenas as suas movimentações.
+          </p>
+        </div>
+      )}
       {/* Filtros */}
       <div className="p-4 border-b border-gray-100 dark:border-gray-800 grid grid-cols-2 lg:grid-cols-6 gap-2">
-        <select className={inputCls} value={filtros.user} onChange={e => mudarFiltro('user', e.target.value)} aria-label="Usuário">
-          <option value="">Todos os usuários</option>
-          {usuarios.map(nome => <option key={nome} value={nome}>{nome}</option>)}
-        </select>
-        <select className={inputCls} value={filtros.tipo} onChange={e => mudarFiltro('tipo', e.target.value)} aria-label="Tipo de ação">
+        {podeVerTodas && (
+          <select className={inputCls} value={filtros.user} onChange={e => mudarFiltro('user', e.target.value)} aria-label="Usuário">
+            <option value="">Todos os usuários</option>
+            {usuarios.map(nome => <option key={nome} value={nome}>{nome}</option>)}
+          </select>
+        )}
+        <select className={`${inputCls} ${!podeVerTodas ? 'lg:col-span-2' : ''}`} value={filtros.tipo} onChange={e => mudarFiltro('tipo', e.target.value)} aria-label="Tipo de ação">
           <option value="">Todas as ações</option>
           <option value="entrada">Entrada</option>
           <option value="saida">Retirada</option>

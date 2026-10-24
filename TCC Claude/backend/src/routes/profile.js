@@ -5,6 +5,7 @@ const db = require('../db');
 const bcrypt = require('bcrypt');
 const { criarLimite } = require('../middleware/limiteRequisicoes');
 const { validarEmailRecuperacao, normalizar } = require('../utils/emailRecuperacao');
+const { permissoesDoCargo } = require('../utils/permissoes');
 
 router.use(authMiddleware);
 
@@ -30,11 +31,13 @@ router.get('/', async (req, res) => {
     [req.user.id]
   );
   const u = rows[0];
+  const role = u?.role || null;
   return res.json({
     avatar_url: u?.avatar_url || null,
-    role: u?.role || null,
+    role,
     email_recuperacao: u?.email_recuperacao || null,
     conta_principal: !!u?.conta_principal,
+    permissoes: role ? permissoesDoCargo(role) : [],
   });
 });
 

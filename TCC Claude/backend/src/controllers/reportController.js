@@ -31,23 +31,29 @@ async function getReport(req, res) {
   ].join(' AND ');
   const params = [from, to];
 
+  // Exclui produtos arquivados de todos os cálculos. Produtos já excluídos (sem linha em products)
+  // continuam aparecendo nos relatórios de movimentações — apenas arquivados são filtrados.
+  const naoArquivado = `NOT EXISTS (SELECT 1 FROM products _p WHERE _p.id = m.product_id AND _p.arquivado = true)`;
+
   const [estoque, totais, top, giro, consumo] = await Promise.all([
     db.query(
       `SELECT COUNT(*)::int AS total,
               COUNT(*) FILTER (WHERE quantidade > 0 AND quantidade <= $1)::int AS baixo,
               COUNT(*) FILTER (WHERE quantidade = 0)::int AS esgotados
-       FROM products WHERE tenant_id = $2`,
+       FROM products WHERE tenant_id = $2 AND arquivado = false`,
       [LOW_STOCK_THRESHOLD, tenantId]
     ),
     db.query(
       `SELECT COALESCE(SUM(m.quantidade) FILTER (WHERE m.tipo = 'entrada'), 0) AS entradas,
               COALESCE(SUM(m.quantidade) FILTER (WHERE m.tipo = 'saida'), 0) AS saidas
-       FROM movements m WHERE m.tipo IN ('entrada','saida') AND m.tenant_id = $3 AND ${periodo}`,
+       FROM movements m WHERE m.tipo IN ('entrada','saida') AND m.tenant_id = $3 AND ${periodo}
+         AND ${naoArquivado}`,
       [...params, tenantId]
     ),
     db.query(
       `SELECT m.product_id, MAX(m.product_nome) AS nome, SUM(m.quantidade) AS quantidade
        FROM movements m WHERE m.tipo = 'saida' AND m.tenant_id = $3 AND ${periodo}
+         AND ${naoArquivado}
        GROUP BY m.product_id ORDER BY SUM(m.quantidade) DESC, MAX(m.product_nome) LIMIT 10`,
       [...params, tenantId]
     ),
@@ -59,14 +65,14 @@ async function getReport(req, res) {
          SELECT m.product_id, SUM(m.quantidade) AS retirado
          FROM movements m WHERE m.tipo = 'saida' AND m.tenant_id = $3 AND ${periodo} GROUP BY m.product_id
        ) s ON s.product_id = p.id
-       WHERE p.tenant_id = $4
+       WHERE p.tenant_id = $4 AND p.arquivado = false
        ORDER BY COALESCE(s.retirado, 0) DESC, p.nome`,
       [...params, tenantId, tenantId]
     ),
     db.query(
       `SELECT COALESCE(NULLIF(TRIM(p.categoria), ''), 'Sem Categoria') AS categoria, SUM(m.quantidade) AS quantidade
        FROM movements m JOIN products p ON p.id = m.product_id
-       WHERE m.tipo = 'saida' AND m.tenant_id = $3 AND ${periodo}
+       WHERE m.tipo = 'saida' AND m.tenant_id = $3 AND ${periodo} AND p.arquivado = false
        GROUP BY 1 ORDER BY SUM(m.quantidade) DESC, 1`,
       [...params, tenantId]
     ),
