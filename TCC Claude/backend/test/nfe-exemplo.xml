@@ -1,6 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<nfeProc xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00"><NFe><infNFe Id="NFe00000000000000000000000000000000000000000000" versao="4.00">
-    <det nItem="1"><prod><cProd>1</cProd><xProd>Arroz Exemplo 5kg</xProd><uCom>PCT</uCom><qCom>10.0000</qCom><uTrib>PCT</uTrib><qTrib>10.0000</qTrib></prod></det>
-    <det nItem="2"><prod><cProd>2</cProd><xProd>Feijao Exemplo 1kg</xProd><uCom>PCT</uCom><qCom>20.0000</qCom><uTrib>PCT</uTrib><qTrib>20.0000</qTrib></prod></det>
-    <det nItem="3"><prod><cProd>3</cProd><xProd>Oleo Exemplo 900ml</xProd><uCom>UN</uCom><qCom>6.0000</qCom><uTrib>UN</uTrib><qTrib>6.0000</qTrib></prod></det>
-</infNFe></NFe></nfeProc>

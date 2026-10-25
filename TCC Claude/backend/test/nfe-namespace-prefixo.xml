@@ -1,5 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<ns:nfeProc xmlns:ns="http://www.portalfiscal.inf.br/nfe"><ns:NFe><ns:infNFe versao="4.00">
-<ns:det nItem="1"><ns:prod><ns:xProd>Produto Com Prefixo</ns:xProd><ns:uCom>CX</ns:uCom><ns:qCom>2.0000</ns:qCom></ns:prod></ns:det>
-<ns:det nItem="2"><ns:prod><ns:xProd>Outro Com Prefixo</ns:xProd><ns:uCom>UN</ns:uCom><ns:qCom>5.0000</ns:qCom></ns:prod></ns:det>
-</ns:infNFe></ns:NFe></ns:nfeProc>

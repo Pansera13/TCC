@@ -38,6 +38,7 @@ export default function AddProductModal({ onClose, onProductsAdded, categories =
   // upload de XML da NF-e
   const [xmlError, setXmlError] = useState('');
   const [xmlDragging, setXmlDragging] = useState(false);
+  const [nfeChave, setNfeChave] = useState(null);
   const xmlInputRef = useRef(null);
 
   // barcode lookup
@@ -259,6 +260,7 @@ export default function AddProductModal({ onClose, onProductsAdded, categories =
           unidade: p.unidade,
           peso_kg: p.peso_kg ?? null,
           categoria: null,
+          nfe_chave: nfeChave || undefined,
         })
       ));
       onProductsAdded();
@@ -284,6 +286,7 @@ export default function AddProductModal({ onClose, onProductsAdded, categories =
       fd.append('arquivo', file);
       const { data } = await api.post('/api/nfe/xml', fd);
       setNfeProducts(data.produtos);
+      setNfeChave(data.chNFe || null);
       setCameraStep('confirm');
     } catch (err) {
       setXmlError(err.response?.data?.message || 'Não foi possível ler o XML da NF-e.');

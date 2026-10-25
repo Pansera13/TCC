@@ -6,3 +6,13 @@ dist/
 .env.local
 .env.*.local
 # (arquivos .env.example* são mantidos no git propositalmente)
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.coverage
+htmlcov/
+.pytest_cache/
+venv/
+*.egg-info/

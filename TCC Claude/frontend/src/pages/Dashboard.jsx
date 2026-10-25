@@ -58,6 +58,7 @@ export default function Dashboard({ darkMode, setDarkMode }) {
   const [recarregando, setRecarregando] = useState(false);
   const [erroRecarga, setErroRecarga] = useState(false);
   const [search, setSearch] = useState('');
+  const [categoriaFiltro, setCategoriaFiltro] = useState('');
   const [layoutProdutos, setLayoutProdutos] = useState(() => localStorage.getItem('sf_layout') || 'lista');
   const [tamanhoLayout, setTamanhoLayout] = useState(() => localStorage.getItem('sf_tamanho') || 'm');
   const [categoriasAbertas, setCategoriasAbertas] = useState(new Set());
@@ -465,13 +466,18 @@ export default function Dashboard({ darkMode, setDarkMode }) {
   }
 
   function renderProdutos() {
-    const { grouped, categorias } = groupProductsByCategory(products, search);
+    const { grouped, categorias: todasCategorias } = groupProductsByCategory(products, search);
+    // Filtro de categoria selecionado na toolbar
+    const categorias = categoriaFiltro ? todasCategorias.filter(c => c === categoriaFiltro) : todasCategorias;
     // Ordenação por coluna dentro de cada categoria
     if (ordem.produtos) for (const cat of categorias) grouped[cat] = sortRows(grouped[cat], ordem.produtos);
     const filtered = categorias.flatMap(cat => grouped[cat]);
 
-    // Buscar volta todas as categorias para a página 1
-    const buscar = (valor) => { setSearch(valor); setPagePorCategoria({}); };
+    // Lista completa de categorias para o select (sem filtro de busca para não sumir opções)
+    const todasCategoriasSelect = [...new Set(products.map(p => p.categoria || 'Sem Categoria'))].sort();
+
+    // Buscar limpa filtro de categoria e volta todas as páginas para 1
+    const buscar = (valor) => { setSearch(valor); setCategoriaFiltro(''); setPagePorCategoria({}); };
 
     // Página atual de uma categoria (limitada ao intervalo válido, também quando o Realtime encolhe a lista)
     const paginaDe = (cat) => paginate(grouped[cat], pagePorCategoria[cat] ?? 1);
@@ -572,34 +578,37 @@ export default function Dashboard({ darkMode, setDarkMode }) {
       </div>
     );
 
-    // ── Layout: Lista — única tabela, colunas alinhadas entre categorias ─
+    // ── Layout: Lista — card por categoria, colapsável ────────────────
     function renderLista() {
       return (
-        <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>{cabecalhoTabela}</thead>
-              <tbody>
-                {categorias.flatMap(cat => [
-                  <tr key={`hdr-${cat}`} className="bg-gray-50/80 dark:bg-gray-800/60 border-t-2 border-gray-100 dark:border-gray-700">
-                    <td colSpan={7} className="px-4 py-2">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm">🗂️</span>
-                        <span className="font-semibold text-sm text-gray-700 dark:text-gray-200">{cat}</span>
-                        <span className="text-xs text-gray-400 dark:text-gray-500 ml-1">{grouped[cat].length} produto{grouped[cat].length !== 1 ? 's' : ''}</span>
-                      </div>
-                    </td>
-                  </tr>,
-                  ...linhasTabela(paginaDe(cat).items),
-                  ...(paginaDe(cat).totalPages > 1 ? [
-                    <tr key={`pg-${cat}`}>
-                      <td colSpan={7}>{rodapePaginacao(cat)}</td>
-                    </tr>,
-                  ] : []),
-                ])}
-              </tbody>
-            </table>
-          </div>
+        <div className="flex flex-col gap-3">
+          {categorias.map(cat => {
+            const open = categoriasAbertas.has(cat);
+            return (
+              <div key={cat} className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden">
+                <div
+                  className="px-4 py-3 flex items-center gap-2 cursor-pointer select-none hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+                  onClick={() => toggleCategoria(cat)}
+                >
+                  <span className="text-sm">🗂️</span>
+                  <span className="font-semibold text-sm text-gray-700 dark:text-gray-200">{cat}</span>
+                  <span className="text-xs text-gray-400 dark:text-gray-500 ml-1">{grouped[cat].length} produto{grouped[cat].length !== 1 ? 's' : ''}</span>
+                  <span className="ml-auto text-xs text-gray-400 dark:text-gray-500">{open ? '▲' : '▼'}</span>
+                </div>
+                {open && (
+                  <>
+                    <div className="overflow-x-auto border-t border-gray-100 dark:border-gray-800">
+                      <table className="w-full">
+                        <thead>{cabecalhoTabela}</thead>
+                        <tbody className="divide-y divide-gray-50 dark:divide-gray-800">{linhasTabela(paginaDe(cat).items)}</tbody>
+                      </table>
+                    </div>
+                    {rodapePaginacao(cat, 'border-t border-gray-100 dark:border-gray-800')}
+                  </>
+                )}
+              </div>
+            );
+          })}
         </div>
       );
     }
@@ -770,6 +779,23 @@ export default function Dashboard({ darkMode, setDarkMode }) {
             {search && (
               <button onClick={() => buscar('')} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xs transition shrink-0">✕</button>
             )}
+          </div>
+
+          {/* Filtro de categoria */}
+          <div className="relative shrink-0">
+            <select
+              value={categoriaFiltro}
+              onChange={e => { setCategoriaFiltro(e.target.value); setPagePorCategoria({}); }}
+              className={`px-3 py-2.5 text-sm rounded-xl border shadow-sm bg-white dark:bg-gray-900 outline-none transition
+                ${categoriaFiltro
+                  ? 'border-purple-500 text-purple-700 dark:text-purple-300'
+                  : 'border-gray-100 dark:border-gray-800 text-gray-700 dark:text-gray-200 hover:border-purple-400 dark:hover:border-purple-500'}`}
+            >
+              <option value="">🗂️ Todas as categorias</option>
+              {todasCategoriasSelect.map(c => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
           </div>
 
           {/* Layout selector button */}

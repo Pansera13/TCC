@@ -1,0 +1,47 @@
+﻿============================= test session starts =============================
+platform win32 -- Python 3.14.7, pytest-9.1.1, pluggy-1.7.0
+django: version: 6.1.2, settings: stockflow.settings (from ini)
+rootdir: C:\Users\lucas\Documents\TCC\TCC Claude\backend-django
+configfile: pytest.ini
+plugins: cov-7.1.0, django-4.14.0
+collected 48 items
+
+api\tests\test_contract.py .....................                         [ 43%]
+api\tests\test_permissions.py ...........................                [100%]
+
+=============================== tests coverage ================================
+_______________ coverage: platform win32, python 3.14.7-final-0 _______________
+
+Name                            Stmts   Miss  Cover   Missing
+-------------------------------------------------------------
+api\__init__.py                     0      0   100%
+api\admin.py                        1      1     0%   1
+api\apps.py                         3      0   100%
+api\cors.py                        35     13    63%   14-19, 29-35
+api\decorators.py                  13      1    92%   12
+api\email_recuperacao.py           34     27    21%   13, 17-27, 31-36, 40-55
+api\middleware.py                  33      9    73%   35-38, 43-46, 49
+api\migrations\__init__.py          0      0   100%
+api\models.py                      65      0   100%
+api\permissions.py                 23      0   100%
+api\tests.py                        1      1     0%   1
+api\tests\__init__.py               0      0   100%
+api\tests\conftest.py              76      4    95%   89-96
+api\tests\test_contract.py        150      0   100%
+api\tests\test_permissions.py      76      0   100%
+api\urls.py                         3      0   100%
+api\views.py                        1      1     0%   1
+api\views\__init__.py               0      0   100%
+api\views\auth.py                 105     64    39%   21-32, 36, 42-103, 112-113, 126-137, 143, 146
+api\views\barcode.py               95     73    23%   19-25, 29, 33-55, 59-87, 91-109, 116-146
+api\views\movements.py             89     70    21%   18-22, 28-109, 115-122
+api\views\nfe.py                   72     58    19%   11, 16-22, 26, 30-31, 38-93
+api\views\notificacoes.py          31     18    42%   11-24, 30-32, 38-47
+api\views\products.py             212    125    41%   31, 34-36, 43-45, 56-57, 74-109, 116-118, 126-127, 133-170, 175-190, 200-201, 205, 213, 228-250, 257-270, 277-289
+api\views\profile.py               64     50    22%   13-17, 21-26, 39-58, 64-90
+api\views\recuperacao.py          229    184    20%   24-26, 30-31, 35-39, 43, 47, 51, 55, 59-60, 64-70, 74-82, 86, 90, 95-100, 104-106, 110-126, 132-168, 178-239, 245-289, 295-328
+api\views\reports.py               50     37    26%   14-23, 29-104
+api\views\users.py                117     97    17%   14-18, 23-33, 38-81, 86-115, 120-141, 146-166
+-------------------------------------------------------------
+TOTAL                            1578    833    47%
+============================= 48 passed in 5.08s ==============================

@@ -14,15 +14,30 @@ O sistema SHALL exibir um modal de adição de produto quando o usuário clicar 
 - **THEN** o sistema exibe um modal centralizado na tela com duas opções visíveis: "Manual" e "Câmera"
 
 ### Requirement: Seleção de modo de entrada
-O modal SHALL apresentar duas opções de entrada — Manual e Câmera — e exibir o conteúdo correspondente ao modo selecionado.
+O modal SHALL apresentar duas opções de entrada — Manual e NF-e (XML) — e exibir o conteúdo correspondente ao modo selecionado.
 
 #### Scenario: Usuário seleciona modo Manual
 - **WHEN** o usuário clica na opção "Manual" no modal
 - **THEN** o sistema exibe o formulário de cadastro manual
 
-#### Scenario: Usuário seleciona modo Câmera
-- **WHEN** o usuário clica na opção "Câmera" no modal
-- **THEN** o sistema inicia o fluxo de leitura de NF-e via câmera
+#### Scenario: Usuário seleciona modo NF-e
+- **WHEN** o usuário clica na opção "NF-e (XML)" no modal
+- **THEN** o sistema exibe área para seleção de arquivo XML da nota fiscal
+
+### Requirement: Importação de produtos via arquivo XML de NF-e
+O modal SHALL permitir que o usuário selecione um arquivo `.xml` de NF-e, envie ao backend para extração dos produtos e revise a lista antes de confirmar. A `chNFe` retornada pelo backend SHALL ser propagada para cada `POST /api/products` na confirmação, habilitando deduplicação e empilhamento no servidor.
+
+#### Scenario: Arquivo selecionado e produtos extraídos
+- **WHEN** o usuário seleciona um arquivo `.xml` válido
+- **THEN** o modal exibe a lista de produtos encontrados na nota com nome, quantidade e unidade para revisão
+
+#### Scenario: NF-e já importada anteriormente
+- **WHEN** o backend retorna HTTP 409 ao tentar importar um XML com `chNFe` já existente
+- **THEN** o modal exibe a mensagem de erro retornada pelo servidor e não avança para a tela de confirmação
+
+#### Scenario: Usuário confirma importação da NF-e
+- **WHEN** o usuário clica em "Confirmar e Adicionar" após revisar a lista
+- **THEN** o modal envia um `POST /api/products` para cada produto com o campo `nfe_chave` preenchido e fecha após o último produto ser processado
 
 ### Requirement: Formulário de cadastro manual
 O sistema SHALL fornecer um formulário com os campos: nome do produto (obrigatório), quantidade (obrigatório, numérico positivo), unidade de medida (obrigatório, opções: UN, KG, L, CX) e categoria (opcional). O campo "Peso (kg)" foi removido — a seleção da unidade KG é suficiente para indicar que a grandeza é em quilogramas.

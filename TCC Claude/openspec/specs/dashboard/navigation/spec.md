@@ -7,15 +7,19 @@ Define o conjunto de abas do Dashboard do StockFlow e a navegação entre elas, 
 ## Requirements
 
 ### Requirement: Conjunto de abas do menu de navegação
-O menu de navegação do Dashboard SHALL listar, nesta ordem, as abas Início, Produtos, Movimentações, Relatórios e Equipe. A aba Equipe SHALL aparecer somente para usuários administradores. O sistema SHALL NOT exibir uma aba Categorias.
+O menu de navegação do Dashboard SHALL listar, nesta ordem, as abas Início, Produtos, Movimentações, Relatórios, Arquivados e Equipe. A aba Arquivados SHALL aparecer somente para usuários com permissão `produto:ver-arquivados` (Sócio e Administrador). A aba Equipe SHALL aparecer somente para usuários com permissão `equipe:ver` (Administrador). O sistema SHALL NOT exibir uma aba Categorias.
 
-#### Scenario: Usuário comum vê as abas sem Equipe
-- **WHEN** um usuário com papel diferente de administrador abre o Dashboard
-- **THEN** o menu lista Início, Produtos, Movimentações e Relatórios, nessa ordem, sem Equipe e sem Categorias
+#### Scenario: Funcionário vê as abas sem Equipe e sem Arquivados
+- **WHEN** um Funcionário abre o Dashboard
+- **THEN** o menu lista Início, Produtos, Movimentações e Relatórios, nessa ordem, sem Equipe, sem Arquivados e sem Categorias
 
-#### Scenario: Administrador vê a aba Equipe
-- **WHEN** um administrador abre o Dashboard
-- **THEN** o menu lista Início, Produtos, Movimentações, Relatórios e Equipe, nessa ordem
+#### Scenario: Sócio vê a aba Arquivados mas não Equipe
+- **WHEN** um Sócio abre o Dashboard
+- **THEN** o menu lista Início, Produtos, Movimentações, Relatórios e Arquivados, sem Equipe
+
+#### Scenario: Administrador vê Arquivados e Equipe
+- **WHEN** um Administrador abre o Dashboard
+- **THEN** o menu lista Início, Produtos, Movimentações, Relatórios, Arquivados e Equipe, nessa ordem
 
 #### Scenario: Aba Categorias não existe
 - **WHEN** qualquer usuário navega pelo menu de navegação

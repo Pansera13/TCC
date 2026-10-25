@@ -50,6 +50,25 @@ Ao alterar o texto de busca, o sistema SHALL reposicionar todas as categorias na
 - **WHEN** a categoria está na última página, que tem um único produto, e esse produto é removido por outra sessão
 - **THEN** a categoria passa a exibir a nova última página, sem página vazia
 
+### Requirement: Layout Lista com categorias colapsáveis
+No layout Lista, cada categoria SHALL ser exibida como um card independente com espaçamento visual entre categorias. Todas as categorias SHALL iniciar fechadas (somente o cabeçalho visível). O usuário SHALL poder expandir ou recolher cada categoria clicando no seu cabeçalho. Um indicador visual (▼/▲) SHALL mostrar o estado atual de cada categoria.
+
+#### Scenario: Abertura do layout Lista
+- **WHEN** o usuário abre a aba Produtos com layout Lista selecionado
+- **THEN** todos os cabeçalhos de categoria aparecem sem produtos visíveis, com ▼ indicando que estão fechados
+
+#### Scenario: Expandir uma categoria
+- **WHEN** o usuário clica no cabeçalho de uma categoria fechada
+- **THEN** os produtos daquela categoria aparecem na tabela abaixo do cabeçalho e o indicador muda para ▲
+
+#### Scenario: Recolher uma categoria
+- **WHEN** o usuário clica no cabeçalho de uma categoria aberta
+- **THEN** os produtos somem e o indicador volta para ▼
+
+#### Scenario: Múltiplas categorias abertas ao mesmo tempo
+- **WHEN** o usuário expande mais de uma categoria
+- **THEN** todas as categorias expandidas exibem seus produtos simultaneamente, sem fechar as demais
+
 ### Requirement: Paginação em celular e modo escuro
 Os controles de paginação SHALL ser utilizáveis em telas estreitas, sem rolagem horizontal da página, e SHALL respeitar os estilos do modo claro e do modo escuro.
 
