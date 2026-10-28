@@ -37,6 +37,7 @@ export default function AddProductModal({ onClose, onProductsAdded, categories =
 
   // upload de XML da NF-e
   const [xmlError, setXmlError] = useState('');
+  const [xmlRetryAfter, setXmlRetryAfter] = useState(0);
   const [xmlDragging, setXmlDragging] = useState(false);
   const [nfeChave, setNfeChave] = useState(null);
   const xmlInputRef = useRef(null);
@@ -55,6 +56,13 @@ export default function AddProductModal({ onClose, onProductsAdded, categories =
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [onClose]);
+
+  // Countdown para bloqueio 429 de NF-e
+  useEffect(() => {
+    if (xmlRetryAfter <= 0) return;
+    const t = setInterval(() => setXmlRetryAfter(n => Math.max(0, n - 1)), 1000);
+    return () => clearInterval(t);
+  }, [xmlRetryAfter > 0]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Start/stop camera when mode changes
   useEffect(() => {
@@ -289,6 +297,9 @@ export default function AddProductModal({ onClose, onProductsAdded, categories =
       setNfeChave(data.chNFe || null);
       setCameraStep('confirm');
     } catch (err) {
+      if (err.response?.status === 429) {
+        setXmlRetryAfter(err.response?.data?.retry_after || 60);
+      }
       setXmlError(err.response?.data?.message || 'Não foi possível ler o XML da NF-e.');
     } finally {
       setLoading(false);
@@ -305,18 +316,20 @@ export default function AddProductModal({ onClose, onProductsAdded, categories =
           Envie o arquivo XML da NF-e (modelo 55) ou NFC-e (modelo 65). Tamanho máximo: 2 MB.
         </p>
         <div
-          onClick={() => !loading && xmlInputRef.current?.click()}
-          onDragOver={(e) => { e.preventDefault(); setXmlDragging(true); }}
+          onClick={() => !loading && !xmlRetryAfter && xmlInputRef.current?.click()}
+          onDragOver={(e) => { e.preventDefault(); if (!xmlRetryAfter) setXmlDragging(true); }}
           onDragLeave={() => setXmlDragging(false)}
           onDrop={(e) => {
             e.preventDefault();
             setXmlDragging(false);
-            if (!loading) handleXmlFile(e.dataTransfer.files?.[0]);
+            if (!loading && !xmlRetryAfter) handleXmlFile(e.dataTransfer.files?.[0]);
           }}
-          className={`flex flex-col items-center gap-2 p-8 rounded-xl border-2 border-dashed text-center transition cursor-pointer
-            ${xmlDragging
-              ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20'
-              : 'border-gray-300 dark:border-gray-700 hover:border-purple-500 dark:hover:border-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20'}`}
+          className={`flex flex-col items-center gap-2 p-8 rounded-xl border-2 border-dashed text-center transition
+            ${xmlRetryAfter > 0
+              ? 'border-gray-200 dark:border-gray-700 opacity-60 cursor-not-allowed'
+              : xmlDragging
+                ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20 cursor-pointer'
+                : 'border-gray-300 dark:border-gray-700 hover:border-purple-500 dark:hover:border-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 cursor-pointer'}`}
         >
           <span className="text-4xl">📄</span>
           <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
@@ -335,6 +348,11 @@ export default function AddProductModal({ onClose, onProductsAdded, categories =
           <div className="text-xs text-red-500 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg px-3 py-2">
             {erro}
           </div>
+        )}
+        {xmlRetryAfter > 0 && (
+          <p className="text-xs text-amber-600 dark:text-amber-400 text-center">
+            Tente novamente em {xmlRetryAfter}s
+          </p>
         )}
         <button
           type="button"

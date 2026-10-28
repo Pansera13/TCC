@@ -10,9 +10,8 @@ import requests as _req
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
-from django.core.cache import cache
-
 from api.models import Usuario
+from api.limites import ip_do_cliente, segundos_bloqueado, registrar_falha
 
 VALIDADE_CODIGO_S = 15 * 60
 INTERVALO_REENVIO_S = 60
@@ -83,27 +82,7 @@ def _verify_recaptcha(token):
 
 
 def _ip_de(request):
-    return (request.META.get('HTTP_X_FORWARDED_FOR', '') or '').split(',')[0].strip() or request.META.get('REMOTE_ADDR', 'unknown')
-
-
-def _rate_limit_key(prefix, key):
-    return f'recuperacao:{prefix}:{key}'
-
-
-def _verificar_limite(prefix, key, max_count):
-    """Retorna segundos de espera (>0 = bloqueado) ou 0 se ok."""
-    cache_key = _rate_limit_key(prefix, key)
-    current = cache.get(cache_key, 0)
-    if current >= max_count:
-        ttl = cache.ttl(cache_key) if hasattr(cache, 'ttl') else HORA_S
-        return ttl or HORA_S
-    return 0
-
-
-def _registrar_limite(prefix, key):
-    cache_key = _rate_limit_key(prefix, key)
-    current = cache.get(cache_key, 0)
-    cache.set(cache_key, current + 1, timeout=HORA_S)
+    return ip_do_cliente(request)
 
 
 def _enviar_email_codigo(email_para, codigo):
@@ -206,8 +185,10 @@ def enviar_codigo(request):
             return resp
 
     ip = _ip_de(request)
-    espera_conta = _verificar_limite('conta', str(conta.id), 3)
-    espera_ip = _verificar_limite('ip', ip, 10)
+    chave_conta = f'recuperacao:conta:{conta.id}'
+    chave_ip_rec = f'recuperacao:ip:{ip}'
+    espera_conta = segundos_bloqueado(chave_conta)
+    espera_ip = segundos_bloqueado(chave_ip_rec)
     if espera_conta > 0 or espera_ip > 0:
         espera = max(espera_conta, espera_ip)
         resp = JsonResponse({'message': 'Muitos códigos solicitados. Tente novamente mais tarde.', 'retry_after': espera}, status=429)
@@ -234,8 +215,8 @@ def enviar_codigo(request):
         conta.save()
         return JsonResponse({'message': 'Não foi possível enviar o e-mail agora. Tente novamente.'}, status=502)
 
-    _registrar_limite('conta', str(conta.id))
-    _registrar_limite('ip', ip)
+    registrar_falha(chave_conta, HORA_S, 3, HORA_S, 'recuperacao-conta')
+    registrar_falha(chave_ip_rec, HORA_S, 10, HORA_S, 'recuperacao-ip')
     return JsonResponse({'message': 'Código enviado.', 'reenvio_em': INTERVALO_REENVIO_S})
 
 

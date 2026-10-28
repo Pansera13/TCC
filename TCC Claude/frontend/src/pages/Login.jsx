@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { login as apiLogin } from '../services/api';
@@ -28,6 +28,8 @@ export default function Login({ darkMode, setDarkMode }) {
   const [senha, setSenha] = useState('');
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [retryAfter, setRetryAfter] = useState(0);
+  const retryTimerRef = useRef(null);
   // Aviso deixado por uma sessão encerrada (ex.: conta desativada)
   const [error, setError] = useState(() => {
     try {
@@ -42,6 +44,12 @@ export default function Login({ darkMode, setDarkMode }) {
   const { loginUser } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+
+  useEffect(() => {
+    return () => {
+      if (retryTimerRef.current) clearInterval(retryTimerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     const s = searchParams.get('success');
@@ -71,7 +79,25 @@ export default function Login({ darkMode, setDarkMode }) {
       loginUser(data.token, data.nome, data.role, data.id, data.avatar_url, data.permissoes);
       navigate('/dashboard');
     } catch (err) {
-      setError(err.response?.data?.message || 'Usuário ou senha inválidos.');
+      if (err.response?.status === 429) {
+        const seconds = err.response.data?.retry_after ?? 60;
+        setRetryAfter(seconds);
+        setError(err.response.data?.message || 'Muitas tentativas. Tente novamente mais tarde.');
+        if (retryTimerRef.current) clearInterval(retryTimerRef.current);
+        retryTimerRef.current = setInterval(() => {
+          setRetryAfter(prev => {
+            if (prev <= 1) {
+              clearInterval(retryTimerRef.current);
+              retryTimerRef.current = null;
+              setError('');
+              return 0;
+            }
+            return prev - 1;
+          });
+        }, 1000);
+      } else {
+        setError(err.response?.data?.message || 'Usuário ou senha inválidos.');
+      }
     } finally {
       setLoading(false);
     }
@@ -164,15 +190,19 @@ export default function Login({ darkMode, setDarkMode }) {
 
             {/* Mensagens de feedback */}
             {success && <p className="text-sm text-green-600 dark:text-green-400 text-center">{success}</p>}
-            {error && <p className="text-sm text-red-500 text-center">{error}</p>}
+            {error && (
+              <p className="text-sm text-red-500 text-center">
+                {error}{retryAfter > 0 ? ` Aguarde ${retryAfter} segundos.` : ''}
+              </p>
+            )}
 
             {/* Botão entrar */}
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || retryAfter > 0}
               className="w-full py-2.5 rounded-lg font-semibold text-sm text-white bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 disabled:opacity-60 transition-all shadow-md mt-1"
             >
-              {loading ? 'Entrando...' : 'ENTRAR'}
+              {loading ? 'Entrando...' : retryAfter > 0 ? `Aguarde ${retryAfter}s` : 'ENTRAR'}
             </button>
           </form>
           </div>
