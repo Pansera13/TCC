@@ -3,9 +3,8 @@
 /*
 !/.gitignore
 !/README.md
-!/TCC Claude/
-!/TCC PEDIDOS/
-!/TCC Codex/
+!/TCC-Claude/
+!/PEDIDOS-TESTE/
 
 # Dentro das pastas permitidas, nunca versionar:
 
