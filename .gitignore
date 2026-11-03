@@ -1,10 +1,9 @@
-# Só estas pastas e arquivos da raiz vão para o GitHub.
+# Só o README e a pasta TCC-Claude da raiz vão para o GitHub.
 # Todo o resto (Obsidian "TCC", logs, imagens soltas, ferramentas) fica só na sua máquina.
 /*
 !/.gitignore
 !/README.md
 !/TCC-Claude/
-!/PEDIDOS-TESTE/
 
 # Dentro das pastas permitidas, nunca versionar:
 
