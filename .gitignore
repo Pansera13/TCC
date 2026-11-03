@@ -30,3 +30,6 @@ Thumbs.db
 # Configuração local do Claude Code e do Obsidian
 **/.claude/settings.local.json
 .obsidian/
+
+# Cache e logs do plugin Playwright
+.playwright-mcp/
