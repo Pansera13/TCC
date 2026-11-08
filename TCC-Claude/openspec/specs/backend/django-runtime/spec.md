@@ -82,7 +82,7 @@ O sistema SHALL aceitar requisições Cross-Origin apenas de origens definidas p
 
 ### Requirement: Rate limit e respostas de erro padronizadas em JSON
 
-O sistema SHALL aplicar rate limit nas rotas de recuperação de senha com os mesmos limites do backend Node (10 buscas por IP/hora; 3 envios por conta/hora) e SHALL retornar todos os erros HTTP (400, 401, 403, 404, 429, 500, 503) como JSON `{ "message": "..." }` nunca como HTML.
+O sistema SHALL aplicar rate limit nas rotas de recuperação de senha com os mesmos limites do backend Node (10 buscas por IP/hora; 3 envios por conta/hora) e SHALL retornar todos os erros HTTP (400, 401, 403, 404, 413, 415, 422, 429, 500, 503) como JSON `{ "message": "..." }` nunca como HTML. Respostas 413 SHALL incluir adicionalmente o campo `"limite_bytes": <n>`. Respostas 429 SHALL incluir `"retry_after": <n>`.
 
 #### Scenario: Erro de validação retorna JSON
 
@@ -93,6 +93,21 @@ O sistema SHALL aplicar rate limit nas rotas de recuperação de senha com os me
 
 - **WHEN** um IP excede 10 buscas de recuperação em uma hora
 - **THEN** o servidor responde HTTP 429 com `retry_after` em segundos
+
+#### Scenario: 413 retornado como JSON
+
+- **WHEN** uma requisição excede o limite de tamanho
+- **THEN** a resposta é `{"message": "Requisição muito grande.", "limite_bytes": <n>}` com status 413, nunca HTML
+
+#### Scenario: 415 retornado como JSON
+
+- **WHEN** uma requisição de upload contém tipo de arquivo não suportado
+- **THEN** a resposta é `{"message": "Envie um arquivo no formato .xml."}` com status 415, nunca HTML
+
+#### Scenario: 422 retornado como JSON
+
+- **WHEN** o XML da NF-e excede os limites estruturais
+- **THEN** a resposta é `{"message": "NF-e contém muitos itens. Máximo permitido: <n>."}` com status 422, nunca HTML
 
 ### Requirement: Compatibilidade com connection pooler do Supabase
 

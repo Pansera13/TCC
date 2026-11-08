@@ -4,7 +4,6 @@ import AddProductModal from '../components/AddProductModal';
 import EditProductModal from '../components/EditProductModal';
 import WithdrawModal from '../components/WithdrawModal';
 import EntradaModal from '../components/EntradaModal';
-import AddUserModal from '../components/AddUserModal';
 import TopNav from '../components/TopNav';
 import Pagination from '../components/Pagination';
 import RecarregarProdutos from '../components/RecarregarProdutos';
@@ -13,10 +12,9 @@ import Reports from '../components/Reports';
 import { groupProductsByCategory, paginate, TABLE_PAGE_SIZE } from '../utils/products';
 import { useFitRows } from '../utils/useFitRows';
 import SortTh from '../components/SortTh';
-import { ROLES, corCargo } from '../utils/roles';
 import { sortRows, proximaOrdem } from '../utils/sort';
 import { zebra, TABLE_WRAP } from '../utils/tables';
-import api, { isRateLimited, listUsers, updateUserRole, toggleUserStatus, deleteUser, listArchivedProducts, restoreProduct, deleteProduct } from '../services/api';
+import api, { isRateLimited, listArchivedProducts, restoreProduct, deleteProduct } from '../services/api';
 import { supabase } from '../supabaseClient';
 
 const ALL_NAV_ITEMS = [
@@ -25,7 +23,6 @@ const ALL_NAV_ITEMS = [
   { id: 'movimentacoes', label: 'Movimentações',    icon: '🔄' },
   { id: 'relatorios',     label: 'Relatórios',       icon: '📊', permissao: 'relatorio:ver' },
   { id: 'arquivados',    label: 'Arquivados',       icon: '🗄', permissao: 'produto:ver-arquivados' },
-  { id: 'equipe',        label: 'Equipe',           icon: '👥', permissao: 'equipe:ver' },
 ];
 
 const LOW_STOCK_THRESHOLD = 3;
@@ -63,11 +60,11 @@ export default function Dashboard({ darkMode, setDarkMode }) {
   const [tamanhoLayout, setTamanhoLayout] = useState(() => localStorage.getItem('sf_tamanho') || 'm');
   const [categoriasAbertas, setCategoriasAbertas] = useState(new Set());
   const [pagePorCategoria, setPagePorCategoria] = useState({});
-  const [pagTabelas, setPagTabelas] = useState({ inicio: 1, esgotados: 1, equipe: 1 });
+  const [pagTabelas, setPagTabelas] = useState({ inicio: 1, esgotados: 1 });
   // Linhas que cabem na área da tabela ativa (Início, Sem estoque ou Equipe), sem rolagem vertical
   const [areaTabelaRef, linhasPorPagina] = useFitRows(TABLE_PAGE_SIZE);
   // Ordenação por coluna de cada tabela (null = ordem original)
-  const [ordem, setOrdem] = useState({ inicio: null, esgotados: null, produtos: null, equipe: null });
+  const [ordem, setOrdem] = useState({ inicio: null, esgotados: null, produtos: null });
   function alternarOrdem(tabela, key) {
     setOrdem(o => ({ ...o, [tabela]: proximaOrdem(o[tabela], key) }));
     if (tabela === 'produtos') setPagePorCategoria({});
@@ -75,12 +72,6 @@ export default function Dashboard({ darkMode, setDarkMode }) {
   }
   const [showLayoutMenu, setShowLayoutMenu] = useState(false);
   const layoutMenuRef = useRef(null);
-
-  // Users
-  const [users, setUsers] = useState([]);
-  const [loadingUsers, setLoadingUsers] = useState(false);
-  const [usersLoaded, setUsersLoaded] = useState(false);
-  const [showAddUser, setShowAddUser] = useState(false);
 
   // Arquivados (Admin)
   const [produtosArquivados, setProdutosArquivados] = useState([]);
@@ -150,19 +141,6 @@ export default function Dashboard({ darkMode, setDarkMode }) {
     if (!ok) {
       setErroRecarga(true);
       erroRecargaTimerRef.current = setTimeout(() => setErroRecarga(false), 4000);
-    }
-  }
-
-  async function fetchUsers() {
-    if (!usersLoaded) setLoadingUsers(true);
-    try {
-      const { data } = await listUsers();
-      setUsers(data);
-      setUsersLoaded(true);
-    } catch {
-      // silently fail
-    } finally {
-      setLoadingUsers(false);
     }
   }
 
@@ -246,7 +224,6 @@ export default function Dashboard({ darkMode, setDarkMode }) {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (activeNav === 'equipe' && !usersLoaded && can('equipe:ver')) fetchUsers();
     if (activeNav === 'arquivados' && can('produto:ver-arquivados')) fetchArquivados();
   }, [activeNav]);
 
@@ -273,35 +250,6 @@ export default function Dashboard({ darkMode, setDarkMode }) {
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
-
-  async function handleChangeRole(u, newRole) {
-    if (newRole === u.role) return;
-    try {
-      await updateUserRole(u.id, newRole);
-      setUsers(prev => prev.map(x => x.id === u.id ? { ...x, role: newRole } : x));
-    } catch (err) {
-      alert(err.response?.data?.message || 'Erro ao atualizar cargo.');
-    }
-  }
-
-  async function handleToggleStatus(u) {
-    try {
-      const { data } = await toggleUserStatus(u.id);
-      setUsers(prev => prev.map(x => x.id === u.id ? { ...x, ativo: data.ativo } : x));
-    } catch (err) {
-      alert(err.response?.data?.message || 'Erro ao atualizar status.');
-    }
-  }
-
-  async function handleDeleteUser(u) {
-    if (!window.confirm(`Remover "${u.nome}" permanentemente? Esta ação não pode ser desfeita.`)) return;
-    try {
-      await deleteUser(u.id);
-      setUsers(prev => prev.filter(x => x.id !== u.id));
-    } catch (err) {
-      alert(err.response?.data?.message || 'Erro ao remover usuário.');
-    }
-  }
 
   async function handleSaveName() {
     const trimmed = newName.trim();
@@ -918,116 +866,6 @@ export default function Dashboard({ darkMode, setDarkMode }) {
     );
   }
 
-  function renderEquipe() {
-    const pagEquipe = paginate(sortRows(users, ordem.equipe), pagTabelas.equipe, linhasPorPagina);
-    return (
-      <>
-        <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 flex-1 min-h-0 flex flex-col">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-800">
-            <h2 className="font-semibold text-gray-800 dark:text-white text-sm">Membros da equipe</h2>
-            <button
-              onClick={() => setShowAddUser(true)}
-              className="px-4 py-2 text-xs bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition font-medium"
-            >
-              + Adicionar membro
-            </button>
-          </div>
-
-          {loadingUsers ? (
-            <div className="flex flex-col items-center justify-center py-20 text-gray-400 dark:text-gray-600">
-              <span className="text-4xl mb-3 animate-pulse">👥</span>
-              <p className="text-sm">Carregando…</p>
-            </div>
-          ) : (
-            <>
-            <div ref={areaTabelaRef} className="overflow-x-auto overflow-y-hidden flex-1 min-h-0">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-xs text-gray-400 dark:text-gray-500 border-b border-gray-100 dark:border-gray-800">
-                    <SortTh k="nome" ordem={ordem.equipe} onSort={k => alternarOrdem('equipe', k)} className="px-4 py-3 font-medium">Nome</SortTh>
-                    <SortTh k="email" ordem={ordem.equipe} onSort={k => alternarOrdem('equipe', k)} className="px-4 py-3 font-medium">E-mail</SortTh>
-                    <SortTh k="role" ordem={ordem.equipe} onSort={k => alternarOrdem('equipe', k)} className="px-4 py-3 font-medium hide-lt-850">Cargo</SortTh>
-                    <SortTh k="ativo" ordem={ordem.equipe} onSort={k => alternarOrdem('equipe', k)} className="px-4 py-3 font-medium hide-lt-1100">Status</SortTh>
-                    <th className="px-4 py-3 font-medium">Ações</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
-                  {pagEquipe.items.map((u, i) => (
-                    <tr key={u.id} className={zebra(i)}>
-                      <td className="px-4 py-1.5 font-medium text-gray-800 dark:text-gray-200">
-                        {u.nome}
-                        {u.id === user?.id && <span className="ml-1.5 text-xs text-gray-400">(você)</span>}
-                      </td>
-                      <td className="px-4 py-1.5 whitespace-nowrap break-anywhere text-gray-500 dark:text-gray-400">{u.email}</td>
-                      <td className="px-4 py-1.5 hide-lt-850">
-                        <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-medium ${corCargo(u.role)}`}>
-                          {ROLES[u.role] || u.role}
-                        </span>
-                      </td>
-                      <td className="px-4 py-1.5 hide-lt-1100">
-                        <span className={`text-xs font-medium ${u.ativo ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}`}>
-                          {u.ativo ? 'Ativo' : 'Inativo'}
-                        </span>
-                      </td>
-                      <td className="px-4 py-1.5">
-                        {(() => {
-                          if (u.id === user?.id) return <span className="text-xs text-gray-400">—</span>;
-                          const podeMudarStatus = can('usuario:status-funcionario') && (u.role === 'user' || can('usuario:gerenciar-privilegiado'));
-                          const podeMudarCargo = can('usuario:alterar-cargo');
-                          const podeRemover = can('usuario:excluir');
-                          if (!podeMudarStatus && !podeMudarCargo && !podeRemover) return <span className="text-xs text-gray-400">—</span>;
-                          const cargosDisponiveis = can('usuario:criar-privilegiado') ? ['admin', 'socio', 'user'] : ['user'];
-                          return (
-                            <div className="flex flex-wrap gap-2">
-                              {podeMudarCargo && (
-                                <select
-                                  value={u.role}
-                                  onChange={e => handleChangeRole(u, e.target.value)}
-                                  title="Alterar cargo"
-                                  className="px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-300 outline-none focus:border-purple-500"
-                                >
-                                  {cargosDisponiveis.map(c => (
-                                    <option key={c} value={c}>{ROLES[c]}</option>
-                                  ))}
-                                </select>
-                              )}
-                              {podeMudarStatus && (
-                                <button
-                                  onClick={() => handleToggleStatus(u)}
-                                  className={`px-4 py-2 text-sm rounded-lg border transition whitespace-nowrap
-                                    ${u.ativo
-                                      ? 'border-red-200 dark:border-red-800 text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20'
-                                      : 'border-green-200 dark:border-green-800 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20'
-                                    }`}
-                                >
-                                  {u.ativo ? 'Desativar' : 'Ativar'}
-                                </button>
-                              )}
-                              {podeRemover && (
-                                <button
-                                  onClick={() => handleDeleteUser(u)}
-                                  className="px-4 py-2 text-sm rounded-lg border border-red-200 dark:border-red-800 text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition whitespace-nowrap"
-                                >
-                                  Remover
-                                </button>
-                              )}
-                            </div>
-                          );
-                        })()}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <Pagination page={pagEquipe.page} totalPages={pagEquipe.totalPages} onChange={n => setPagTabelas(s => ({ ...s, equipe: n }))} className="shrink-0 border-t border-gray-100 dark:border-gray-800" />
-            </>
-          )}
-        </div>
-      </>
-    );
-  }
-
   function renderArquivados() {
     async function handleRestaurar(p) {
       try {
@@ -1142,7 +980,7 @@ export default function Dashboard({ darkMode, setDarkMode }) {
         />
 
         <main className="flex-1 overflow-auto px-3 sm:px-[3cm] pt-4 sm:pt-6 pb-[1cm]">
-          <div className={`flex flex-col gap-4 ${['dashboard', 'sem-estoque', 'equipe', 'movimentacoes'].includes(activeNav) ? 'h-full' : 'min-h-full'}`}>
+          <div className={`flex flex-col gap-4 ${['dashboard', 'sem-estoque', 'movimentacoes'].includes(activeNav) ? 'h-full' : 'min-h-full'}`}>
             {activeNav === 'dashboard'     && renderInicio()}
             {activeNav === 'produtos'      && renderProdutos()}
             {activeNav === 'movimentacoes' && (
@@ -1156,7 +994,6 @@ export default function Dashboard({ darkMode, setDarkMode }) {
             {activeNav === 'relatorios' && <Reports />}
             {activeNav === 'sem-estoque' && <div className={`${TABLE_WRAP} flex-1 min-h-0 flex flex-col`}>{renderSemEstoque()}</div>}
             {activeNav === 'arquivados' && can('produto:ver-arquivados') && <div className={`${TABLE_WRAP} flex-1 min-h-0 flex flex-col`}>{renderArquivados()}</div>}
-            {activeNav === 'equipe' && can('equipe:ver') && <div className={`${TABLE_WRAP} flex-1 min-h-0 flex flex-col`}>{renderEquipe()}</div>}
           </div>
         </main>
       </div>
@@ -1201,13 +1038,6 @@ export default function Dashboard({ darkMode, setDarkMode }) {
                 p.id === withdrawItem.id ? { ...p, quantidade: parseFloat(p.quantidade) - qty } : p
               ));
             }}
-        />
-      )}
-      {showAddUser && (
-        <AddUserModal
-          onClose={() => setShowAddUser(false)}
-          onUserAdded={fetchUsers}
-          cargos={can('usuario:criar-privilegiado') ? ['admin', 'socio', 'user'] : ['user']}
         />
       )}
     </div>

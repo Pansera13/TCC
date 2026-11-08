@@ -3,7 +3,7 @@
 ## 1. Preparação: branch e baseline visual
 
 - [x] 1.1 Criar branch `feature/otimizar-requisicoes-do-frontend` a partir de `main` e confirmar que `npm run build` e `python -m pytest` passam sem erros nela.
-- [ ] 1.2 Tirar prints de baseline com Playwright de todas as telas exigidas (login, Início, Produtos Lista, Produtos Cards, Sem estoque, Arquivados, Movimentações, Relatórios, Equipe, sino aberto, modais de produto/retirada/entrada/NF-e) nos modos claro e escuro e em 375 px e 1280 px. Salvar em pasta temporária fora do repositório. Verificar: pasta existe, prints cobrem todas as 14 telas × 2 modos × 2 larguras.
+- [x] 1.2 Tirar prints de baseline com Playwright de todas as telas exigidas (login, Início, Produtos Lista, Produtos Cards, Sem estoque, Arquivados, Movimentações, Relatórios, Equipe, sino aberto, modais de produto/retirada/entrada/NF-e) nos modos claro e escuro e em 375 px e 1280 px. Salvar em pasta temporária fora do repositório. Verificar: pasta existe, prints cobrem todas as 14 telas × 2 modos × 2 larguras.
 
 ## 2. Tratamento central de 429 em `api.js`
 
@@ -56,7 +56,7 @@
 ## 10. Importação de NF-e via endpoint em lote
 
 - [x] 10.1 Em `AddProductModal.jsx`, substituir `handleConfirmNfe`: em vez de `Promise.all(nfeProducts.map(...))`, chamar `importProductsBatch({ itens: nfeProducts.map(p => ({ nome: p.nome, quantidade: p.quantidade, unidade: p.unidade, peso_kg: p.peso_kg ?? null, categoria: null, nfe_chave: nfeChave })) })`. Em caso de sucesso, chamar `onProductsAdded(); onClose()` como hoje. Em caso de erro, chamar `setCameraStep('error'); setCameraError(msg)` como hoje. Verificar: `npm run build` e `npm run lint` passam.
-- [ ] 10.2 Verificar com XML de exemplo (dados fictícios, SOMENTE APÓS CONFIRMAR COM O USUÁRIO a conta de teste e o protocolo de limpeza — ver OQ-2): importar XML com 5 itens gera exatamente 1 `POST /api/products/lote` (e 0 `POST /api/products`). Confirmar com o usuário antes de executar qualquer operação de escrita e apagar/arquivar os dados criados com a confirmação do usuário.
+- [x] 10.2 Verificar com XML de exemplo (dados fictícios, SOMENTE APÓS CONFIRMAR COM O USUÁRIO a conta de teste e o protocolo de limpeza — ver OQ-2): importar XML com 5 itens gera exatamente 1 `POST /api/products/lote` (e 0 `POST /api/products`). Confirmar com o usuário antes de executar qualquer operação de escrita e apagar/arquivar os dados criados com a confirmação do usuário.
 
 ## 11. Paginação opcional em GET /api/products (bônus)
 
@@ -64,8 +64,8 @@
 
 ## 12. Medição depois e comparação visual
 
-- [ ] 12.1 Medir com Playwright (somente leitura) os mesmos cenários do relatório "Tráfego da API": carga inicial, troca de 8 abas, repouso de 2 minutos, relatórios, Movimentações. Registrar os números em "01 - Sistema/Tráfego da API.md" na seção "Antes × Depois". Verificar que as metas foram atingidas: carga inicial ≤ 4 req; repouso ≤ 4 req/min; aba oculta 0 req; NF-e de 30 itens = 1 req; Movimentações = 1 req por abertura; relatório personalizado = 1 req por alteração concluída.
-- [ ] 12.2 Tirar prints de todas as 14 telas × 2 modos × 2 larguras (mesma matriz do baseline). Comparar par a par com os prints do passo 1.2. Verificar: 0 diferenças visuais. Qualquer diferença é um defeito a corrigir antes de prosseguir.
+- [x] 12.1 Medir com Playwright (somente leitura) os mesmos cenários do relatório "Tráfego da API": carga inicial, troca de 8 abas, repouso de 2 minutos, relatórios, Movimentações. Registrar os números em "01 - Sistema/Tráfego da API.md" na seção "Antes × Depois". Verificar que as metas foram atingidas: carga inicial ≤ 4 req; repouso ≤ 4 req/min; aba oculta 0 req; NF-e de 30 itens = 1 req; Movimentações = 1 req por abertura; relatório personalizado = 1 req por alteração concluída.
+- [x] 12.2 Tirar prints de todas as 14 telas × 2 modos × 2 larguras (mesma matriz do baseline). Comparar par a par com os prints do passo 1.2. Verificar: 0 diferenças visuais. Qualquer diferença é um defeito a corrigir antes de prosseguir.
 
 ## 13. Qualidade e documentação final
 

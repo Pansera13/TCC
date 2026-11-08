@@ -1,7 +1,7 @@
 """Testa a matriz de permissões — espelho de backend/test/permissoes-rotas.test.js"""
 import pytest
 from api.permissions import (
-    can, permissoes_do_cargo, pode_alterar_conta, pode_criar_cargo, cargo_valido
+    can, permissoes_do_cargo, cargo_valido
 )
 
 
@@ -65,45 +65,6 @@ class TestPermissoesDoCargo:
         perms_user = set(permissoes_do_cargo('user'))
         assert perms_user.issubset(perms_socio)
 
-
-# ── pode_alterar_conta() / pode_criar_cargo() ─────────────────────────────────
-
-class TestPodeAlterarConta:
-    def test_admin_pode_alterar_user(self):
-        assert pode_alterar_conta('admin', 'user')
-
-    def test_admin_pode_alterar_socio(self):
-        assert pode_alterar_conta('admin', 'socio')
-
-    def test_admin_pode_alterar_admin(self):
-        assert pode_alterar_conta('admin', 'admin')
-
-    def test_socio_pode_alterar_user(self):
-        assert pode_alterar_conta('socio', 'user')
-
-    def test_socio_nao_pode_alterar_socio(self):
-        assert not pode_alterar_conta('socio', 'socio')
-
-    def test_socio_nao_pode_alterar_admin(self):
-        assert not pode_alterar_conta('socio', 'admin')
-
-    def test_user_nao_pode_alterar_ninguem(self):
-        assert not pode_alterar_conta('user', 'user')
-
-
-class TestPodeCriarCargo:
-    def test_admin_cria_qualquer_cargo(self):
-        assert pode_criar_cargo('admin', 'user')
-        assert pode_criar_cargo('admin', 'socio')
-        assert pode_criar_cargo('admin', 'admin')
-
-    def test_socio_so_cria_user(self):
-        assert pode_criar_cargo('socio', 'user')
-        assert not pode_criar_cargo('socio', 'socio')
-        assert not pode_criar_cargo('socio', 'admin')
-
-    def test_user_nao_cria_nada(self):
-        assert not pode_criar_cargo('user', 'user')
 
 
 class TestCargoValido:

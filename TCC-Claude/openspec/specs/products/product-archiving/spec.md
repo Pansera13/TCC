@@ -37,7 +37,7 @@ Listagens, busca, Início, Sem estoque e Relatórios SHALL ignorar produtos arqu
 - **THEN** o servidor responde com erro informando que o produto está arquivado e nada é alterado
 
 ### Requirement: Visão Arquivados do Administrador
-O Administrador SHALL ter uma visão "Arquivados" com os produtos arquivados, onde pode restaurar cada um ou excluí-lo definitivamente. Os demais cargos SHALL NOT acessar essa visão nem a lista de arquivados pela API.
+O Administrador SHALL ter uma visão "Arquivados" com os produtos arquivados, onde pode restaurar cada um ou excluí-lo definitivamente. Os demais cargos SHALL NOT acessar essa visão nem a lista de arquivados pela API. A lista SHALL ser mantida em cache em memória: carregada na primeira visita à aba e mantida nas visitas seguintes sem nova requisição. O cache SHALL ser invalidado ao arquivar, restaurar ou excluir um produto, e SHALL ser recarregado ao clicar no botão Atualizar já existente.
 
 #### Scenario: Restaurar produto
 - **WHEN** o Administrador restaura um produto arquivado
@@ -54,6 +54,18 @@ O Administrador SHALL ter uma visão "Arquivados" com os produtos arquivados, on
 #### Scenario: Não-administrador pede os arquivados
 - **WHEN** um Sócio ou Funcionário pede a lista de arquivados
 - **THEN** o servidor responde 403
+
+#### Scenario: Navegação repetida entre abas
+- **WHEN** o Administrador visita a aba Arquivados, troca para outra aba e volta a Arquivados
+- **THEN** nenhuma nova requisição é feita; os dados em cache são exibidos imediatamente
+
+#### Scenario: Arquivar invalida o cache
+- **WHEN** o Administrador arquiva um produto estando na aba Arquivados ou em outra aba
+- **THEN** o cache da lista de arquivados é invalidado e a próxima visita à aba busca dados atualizados
+
+#### Scenario: Botão Atualizar recarrega
+- **WHEN** o Administrador clica no botão Atualizar já existente na aba Arquivados
+- **THEN** uma nova requisição é feita e o cache é substituído pelos dados recebidos
 
 ### Requirement: Compatibilidade com o Realtime
 Arquivar e restaurar SHALL ser atualizações (UPDATE) da linha do produto, e as telas abertas SHALL refletir a mudança em tempo real sem recarregar.

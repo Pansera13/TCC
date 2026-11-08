@@ -77,10 +77,4 @@ export const listMovements = (params) => api.get('/api/movements', { params });
 export const listMovementUsers = () => api.get('/api/movements/users');
 export const getReport = (from, to) => api.get('/api/reports', { params: { from, to } });
 
-export const listUsers = () => api.get('/api/users');
-export const createUser = (data) => api.post('/api/users', data);
-export const updateUserRole = (id, role) => api.put(`/api/users/${id}/role`, { role });
-export const toggleUserStatus = (id) => api.put(`/api/users/${id}/status`);
-export const deleteUser = (id) => api.delete(`/api/users/${id}`);
-
 export default api;

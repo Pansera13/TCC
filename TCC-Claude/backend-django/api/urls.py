@@ -1,5 +1,5 @@
 from django.urls import path
-from api.views import auth, products, movements, users, profile, reports, nfe, barcode, notificacoes, recuperacao
+from api.views import auth, products, movements, profile, reports, nfe, barcode, notificacoes, recuperacao
 
 urlpatterns = [
     # Auth
@@ -29,12 +29,6 @@ urlpatterns = [
 
     # Reports
     path('reports', reports.get_report),
-
-    # Users / team
-    path('users', users.users_list_create),
-    path('users/<int:pk>/role', users.update_user_role),
-    path('users/<int:pk>/status', users.toggle_user_status),
-    path('users/<int:pk>', users.delete_user),
 
     # Profile
     path('profile', profile.profile),

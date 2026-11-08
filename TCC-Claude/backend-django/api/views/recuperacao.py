@@ -60,8 +60,6 @@ def _mascarar_email(email):
 
 
 def _sem_saida(conta):
-    if conta.tenant_id != conta.id:
-        return 403, {'codigo': 'conta_equipe', 'message': 'Esta conta é de equipe. Peça ao administrador da sua empresa para redefinir a sua senha.'}
     if not conta.ativo:
         return 403, {'codigo': 'conta_desativada', 'message': 'Esta conta está desativada. Fale com o administrador.'}
     if not conta.email_recuperacao:
@@ -284,8 +282,6 @@ def redefinir_senha(request):
         return JsonResponse({'message': 'Link expirado ou já usado. Comece de novo.'}, status=400)
 
     nova = str(body.get('nova_senha', ''))
-    if len(nova) < 8:
-        return JsonResponse({'message': 'Mínimo 8 caracteres.', 'field': 'nova_senha'}, status=400)
 
     try:
         conta = Usuario.objects.get(id=dados['id'])
@@ -300,6 +296,11 @@ def redefinir_senha(request):
     )
     if _sem_saida(conta)[1] or not vigente or _impressao(conta.reset_code_hash) != dados.get('imp'):
         return JsonResponse({'message': 'Link expirado ou já usado. Comece de novo.'}, status=400)
+
+    from api.senha import validar_senha
+    erro_senha = validar_senha(nova, email=conta.email, nome=conta.nome)
+    if erro_senha:
+        return JsonResponse({'message': erro_senha, 'field': 'nova_senha'}, status=400)
 
     conta.senha_hash = bcrypt.hashpw(nova.encode(), bcrypt.gensalt(rounds=12)).decode()
     conta.reset_code_hash = None

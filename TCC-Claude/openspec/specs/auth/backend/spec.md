@@ -8,7 +8,7 @@ API REST de autenticação do StockFlow: registra usuários, autentica credencia
 
 ### Requirement: Rota de cadastro
 
-`POST /api/auth/register` DEVE aceitar nome completo, nome da empresa, CPF ou CNPJ, e-mail, e-mail de recuperação (`email_recuperacao`), sua confirmação (`email_recuperacao_confirmacao`) e senha. Senha DEVE ser armazenada como hash bcrypt. CPF/CNPJ e e-mail DEVEM ser únicos; o e-mail de recuperação PODE se repetir entre contas. O e-mail de recuperação DEVE ser validado conforme a spec `auth/register`. DEVE retornar 201 em sucesso, 400 para e-mail de recuperação inválido ou ausente e 409 em duplicidade.
+`POST /api/auth/register` DEVE aceitar nome completo, nome da empresa, CPF ou CNPJ, e-mail, e-mail de recuperação (`email_recuperacao`), sua confirmação (`email_recuperacao_confirmacao`) e senha. Senha DEVE ser armazenada como hash bcrypt. CPF/CNPJ e e-mail DEVEM ser únicos; o e-mail de recuperação PODE se repetir entre contas. O e-mail de recuperação DEVE ser validado conforme a spec `auth/register`. DEVE retornar 201 em sucesso, 400 para e-mail de recuperação inválido ou ausente, 409 em duplicidade e 429 quando o IP exceder o limite de tentativas.
 
 #### Scenario: Cadastro bem-sucedido
 
@@ -25,9 +25,14 @@ API REST de autenticação do StockFlow: registra usuários, autentica credencia
 - **WHEN** rota recebe `email_recuperacao` ausente, igual ao e-mail de login, de provedor não permitido ou diferente da confirmação
 - **THEN** retorna HTTP 400 com `field` igual a `email_recuperacao` e, quando houver domínio parecido com um permitido, a sugestão de correção
 
+#### Scenario: IP excede limite de cadastros
+
+- **WHEN** o mesmo IP realiza mais tentativas de cadastro do que o limite configurado na janela de tempo
+- **THEN** retorna HTTP 429 com `{"message": "Muitas tentativas. Tente novamente mais tarde.", "retry_after": <segundos>}` e cabeçalho `Retry-After`
+
 ### Requirement: Rota de login
 
-`POST /api/auth/login` DEVE aceitar identificador (nome da empresa, CNPJ ou CPF) e senha. O sistema DEVE detectar o tipo do identificador e buscar no campo correto. Em caso de sucesso DEVE retornar token JWT com expiração de 8 horas. Em caso de falha DEVE retornar 401 com mensagem genérica.
+`POST /api/auth/login` DEVE aceitar identificador (nome da empresa, CNPJ, CPF ou e-mail) e senha. O sistema DEVE detectar o tipo do identificador e buscar no campo correto. Em caso de sucesso DEVE retornar token JWT com expiração de 8 horas. Em caso de falha DEVE retornar 401 com mensagem genérica. Após exceder o limite de tentativas por IP ou por identificador, DEVE retornar 429 antes de processar as credenciais.
 
 #### Scenario: Login com credenciais válidas
 
@@ -38,6 +43,21 @@ API REST de autenticação do StockFlow: registra usuários, autentica credencia
 
 - **WHEN** rota recebe identificador ou senha incorretos
 - **THEN** retorna HTTP 401 com mensagem "Usuário ou senha inválidos"
+
+#### Scenario: IP bloqueado por excesso de falhas
+
+- **WHEN** o IP do cliente excedeu o limite de falhas de login na janela configurada
+- **THEN** retorna HTTP 429 com `retry_after` real e cabeçalho `Retry-After`, sem consultar o banco
+
+#### Scenario: Identificador bloqueado por excesso de falhas
+
+- **WHEN** o identificador (normalizado) excedeu o limite de falhas na janela configurada
+- **THEN** retorna HTTP 429 com `retry_after` real e cabeçalho `Retry-After`, sem consultar o banco
+
+#### Scenario: Identificador inexistente retorna mesmo erro que senha errada
+
+- **WHEN** rota recebe um identificador que não existe no banco
+- **THEN** retorna HTTP 401 com a mesma mensagem de "Usuário ou senha inválidos" e incrementa o contador do identificador para o rate limit
 
 ### Requirement: Rotas de recuperação de senha
 
