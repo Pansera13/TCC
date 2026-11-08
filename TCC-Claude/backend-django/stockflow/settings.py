@@ -32,6 +32,11 @@ SECURE_CSP = {
     'frame-ancestors': [CSP.NONE],
 }
 
+# ── Limites de tamanho de requisição ─────────────────────────────────────────
+DATA_UPLOAD_MAX_MEMORY_SIZE = int(os.environ.get('DATA_UPLOAD_MAX_MEMORY_SIZE', 64 * 1024))
+FILE_UPLOAD_MAX_MEMORY_SIZE = int(os.environ.get('FILE_UPLOAD_MAX_MEMORY_SIZE', 2 * 1024 * 1024))
+DATA_UPLOAD_MAX_NUMBER_FIELDS = int(os.environ.get('DATA_UPLOAD_MAX_NUMBER_FIELDS', 200))
+
 # ── Configurações de produção — somente quando DEBUG=False ────────────────────
 # HSTS, SSL redirect e cookies seguros nunca ficam ativos em desenvolvimento.
 # Subida gradual recomendada: 300s → 3600s → 86400s → 31536000s (1 ano).
@@ -62,6 +67,8 @@ MIDDLEWARE = [
     'api.cors.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
     'api.middleware.PermissionsPolicyMiddleware',
+    'api.middleware.GlobalRateLimitMiddleware',
+    'api.middleware.RequestSizeLimitMiddleware',
     'api.middleware.JWTAuthMiddleware',
 ]
 
@@ -132,7 +139,14 @@ else:
     CORS_ALLOWED_ORIGINS = []
     CORS_ALLOWED_ORIGINS_REGEX = _RFC1918
 
-# ── Rate limit ────────────────────────────────────────────────────────────────
+# ── Rate limit global ────────────────────────────────────────────────────────
+# Requisições máximas por IP por janela — ajuste para valores menores em produção.
+# 0 = desabilitado.
+GLOBAL_RATE_LIMIT_MAX = int(os.environ.get('GLOBAL_RATE_LIMIT_MAX', 1000))
+GLOBAL_RATE_LIMIT_JANELA_SEGUNDOS = int(os.environ.get('GLOBAL_RATE_LIMIT_JANELA_SEGUNDOS', 60))
+GLOBAL_RATE_LIMIT_BLOQUEIO_SEGUNDOS = int(os.environ.get('GLOBAL_RATE_LIMIT_BLOQUEIO_SEGUNDOS', 60))
+
+# ── Rate limit (django-ratelimit — mantido como fallback, não usado diretamente) ──
 RATELIMIT_USE_CACHE = 'default'
 CACHES = {
     'default': {
@@ -178,6 +192,11 @@ LOGGING = {
     },
     'loggers': {
         'api.limites': {
+            'handlers': ['console'],
+            'level': 'WARNING',
+            'propagate': False,
+        },
+        'api.middleware': {
             'handlers': ['console'],
             'level': 'WARNING',
             'propagate': False,

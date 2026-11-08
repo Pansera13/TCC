@@ -77,6 +77,24 @@ Variáveis principais:
 
 > **Cache em produção:** em desenvolvimento o rate limit usa `LocMemCache` (memória do processo). Em produção com múltiplos workers, configure um cache compartilhado (ex.: Redis via `django-redis`) para que os contadores sejam globais.
 
+### Limites de tamanho em produção
+
+O Django rejeita requisições acima dos seguintes limites configuráveis:
+
+| Rota | Limite padrão | Variável |
+|---|---|---|
+| Todas (JSON, formulários) | 64 KB | `DATA_UPLOAD_MAX_MEMORY_SIZE` |
+| `POST /api/nfe/xml` | 2 MB | `NFE_MAX_SIZE_BYTES` |
+
+**Em produção**, o proxy reverso (nginx, Caddy, etc.) deve aplicar o mesmo limite **antes** de encaminhar a requisição ao Django — assim o corpo excessivo não consome banda nem thread do Django:
+
+```nginx
+# nginx: valor mínimo que cobre o maior limite configurado
+client_max_body_size 2m;
+```
+
+O servidor de desenvolvimento embutido do Django não é defesa suficiente contra requisições grandes em produção.
+
 ### Variáveis de segurança (cabeçalhos)
 
 | Variável | Padrão | Descrição |

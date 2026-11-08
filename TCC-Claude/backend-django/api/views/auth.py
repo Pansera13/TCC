@@ -15,6 +15,7 @@ from api.limites import (
     ip_do_cliente, segundos_bloqueado, registrar_falha, limpar_contador,
     chave_id, _DUMMY_HASH,
 )
+from api.senha import validar_senha
 
 
 def _jwt_secret():
@@ -100,6 +101,11 @@ def register(request):
     if recaptcha_enabled and not recaptcha_token:
         registrar_falha(chave_reg_ip, jan_s, max_f, bloq_s, 'register')
         return JsonResponse({'message': 'Preencha todos os campos.'}, status=400)
+
+    erro_senha = validar_senha(senha, email=email, nome=nome)
+    if erro_senha:
+        registrar_falha(chave_reg_ip, jan_s, max_f, bloq_s, 'register')
+        return JsonResponse({'message': erro_senha, 'field': 'senha'}, status=400)
 
     if normalizar(email_recuperacao) != normalizar(email_recuperacao_confirmacao):
         registrar_falha(chave_reg_ip, jan_s, max_f, bloq_s, 'register')

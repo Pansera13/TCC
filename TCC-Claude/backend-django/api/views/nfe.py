@@ -118,7 +118,7 @@ def parse_nfe(request):
         if f.size > max_size:
             _log_rejeicao(request, 413, 'tamanho')
             return JsonResponse(
-                {'message': f'Arquivo muito grande. Máximo: {max_size // 1024} KB.', 'limite_bytes': max_size},
+                {'message': 'Requisição muito grande.', 'limite_bytes': max_size},
                 status=413,
             )
 
@@ -136,33 +136,17 @@ def parse_nfe(request):
         xml_bytes = f.read()
 
     else:
-        # Corpo raw: verificar Content-Length antes de ler
-        cl_raw = request.META.get('CONTENT_LENGTH', '')
-        try:
-            cl = int(cl_raw)
-            if cl < 0:
-                raise ValueError
-        except (ValueError, TypeError):
-            cl = None
-
-        if cl is not None and cl > max_size:
-            _log_rejeicao(request, 413, 'tamanho')
-            return JsonResponse(
-                {'message': f'Arquivo muito grande. Máximo: {max_size // 1024} KB.', 'limite_bytes': max_size},
-                status=413,
-            )
-
         # 4. Content-Type do corpo
         if not _ct_ok(request.content_type):
             _log_rejeicao(request, 415, 'content_type')
             return JsonResponse({'message': 'Envie um arquivo no formato .xml.'}, status=415)
 
-        # 5. Leitura (fallback de tamanho para requisições sem Content-Length)
-        xml_bytes = request.body
+        # 5. Leitura — middleware já rejeita via Content-Length; fallback para sem CL
+        xml_bytes = request.body  # RequestDataTooBig → capturado por process_exception
         if len(xml_bytes) > max_size:
             _log_rejeicao(request, 413, 'tamanho')
             return JsonResponse(
-                {'message': f'Arquivo muito grande. Máximo: {max_size // 1024} KB.', 'limite_bytes': max_size},
+                {'message': 'Requisição muito grande.', 'limite_bytes': max_size},
                 status=413,
             )
 
