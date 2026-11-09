@@ -38,30 +38,54 @@ class FakeRequest:
 
 
 @override_settings(CACHES=CACHE_TEST)
-def test_ip_trusted_proxy_false_ignora_forwarded(settings):
+def test_ip_count0_usa_remote_addr(monkeypatch):
     from api.limites import ip_do_cliente
-    import os
-    original = os.environ.pop('TRUSTED_PROXY', None)
-    try:
-        req = FakeRequest(remote_addr='1.2.3.4', forwarded='9.9.9.9, 10.0.0.1')
-        assert ip_do_cliente(req) == '1.2.3.4'
-    finally:
-        if original is not None:
-            os.environ['TRUSTED_PROXY'] = original
+    monkeypatch.setenv('TRUSTED_PROXY_COUNT', '0')
+    req = FakeRequest(remote_addr='1.2.3.4', forwarded='9.9.9.9, 10.0.0.1')
+    assert ip_do_cliente(req) == '1.2.3.4'
 
 
 @override_settings(CACHES=CACHE_TEST)
-def test_ip_trusted_proxy_true_usa_forwarded(monkeypatch):
+def test_ip_count0_ignora_forjado(monkeypatch):
+    """Com 0 proxies, XFF forjado pelo cliente é completamente ignorado."""
     from api.limites import ip_do_cliente
-    monkeypatch.setenv('TRUSTED_PROXY', 'true')
-    req = FakeRequest(remote_addr='10.0.0.1', forwarded='9.9.9.9, 10.0.0.1')
-    assert ip_do_cliente(req) == '9.9.9.9'
+    monkeypatch.delenv('TRUSTED_PROXY_COUNT', raising=False)
+    req = FakeRequest(remote_addr='1.2.3.4', forwarded='FORJADO')
+    assert ip_do_cliente(req) == '1.2.3.4'
 
 
 @override_settings(CACHES=CACHE_TEST)
-def test_ip_trusted_proxy_sem_forwarded_usa_remote(monkeypatch):
+def test_ip_count1_usa_ultimo_xff(monkeypatch):
+    """Com 1 proxy confiável, usa o último IP do X-Forwarded-For."""
     from api.limites import ip_do_cliente
-    monkeypatch.setenv('TRUSTED_PROXY', 'true')
+    monkeypatch.setenv('TRUSTED_PROXY_COUNT', '1')
+    req = FakeRequest(remote_addr='proxy_ip', forwarded='client_ip')
+    assert ip_do_cliente(req) == 'client_ip'
+
+
+@override_settings(CACHES=CACHE_TEST)
+def test_ip_count2_pega_segundo_da_direita(monkeypatch):
+    """Com 2 proxies, XFF='a, b, c' → pega 'b' (2º da direita)."""
+    from api.limites import ip_do_cliente
+    monkeypatch.setenv('TRUSTED_PROXY_COUNT', '2')
+    req = FakeRequest(remote_addr='proxy2', forwarded='a, b, c')
+    assert ip_do_cliente(req) == 'b'
+
+
+@override_settings(CACHES=CACHE_TEST)
+def test_ip_count_maior_que_entradas_usa_mais_antigo(monkeypatch):
+    """Se XFF tiver menos entradas que COUNT, usa ips[0] (fallback seguro)."""
+    from api.limites import ip_do_cliente
+    monkeypatch.setenv('TRUSTED_PROXY_COUNT', '5')
+    req = FakeRequest(remote_addr='proxy', forwarded='a, b')
+    assert ip_do_cliente(req) == 'a'
+
+
+@override_settings(CACHES=CACHE_TEST)
+def test_ip_count1_sem_forwarded_usa_remote(monkeypatch):
+    """Com COUNT=1 mas sem XFF presente, cai em REMOTE_ADDR."""
+    from api.limites import ip_do_cliente
+    monkeypatch.setenv('TRUSTED_PROXY_COUNT', '1')
     req = FakeRequest(remote_addr='5.5.5.5')
     assert ip_do_cliente(req) == '5.5.5.5'
 

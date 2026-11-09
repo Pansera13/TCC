@@ -1,7 +1,6 @@
 """
 Testes para a política de senha (api/senha.py) e seus pontos de entrada:
   - register (POST /api/auth/register)
-  - create_user (POST /api/users)
   - redefinir_senha (POST /api/auth/recuperacao/redefinir-senha)
 """
 import json
@@ -185,6 +184,23 @@ class TestPoliticaSenhaRegister:
         resp = c.post(self.URL, data=json.dumps(corpo), content_type='application/json')
         assert resp.status_code == 400
         assert resp.json().get('field') == 'senha'
+
+    def test_senha_forte_retorna_201(self, db, monkeypatch):
+        # Remove RECAPTCHA_SECRET para que o endpoint não exija nem verifique o token
+        # (comportamento esperado quando a variável não está configurada).
+        monkeypatch.delenv('RECAPTCHA_SECRET', raising=False)
+        corpo = {
+            'nome': 'Usuario Teste',
+            'nome_empresa': 'Empresa Teste',
+            'cpf_cnpj': _cpf(),
+            'email': _email(),
+            'senha': 'Rj#8Lm2v!QzP',
+            'email_recuperacao': 'rec@hotmail.com',
+            'email_recuperacao_confirmacao': 'rec@hotmail.com',
+        }
+        c = Client()
+        resp = c.post(self.URL, data=json.dumps(corpo), content_type='application/json')
+        assert resp.status_code == 201
 
 
 # ══════════════════════════════════════════════════════════════════════════════

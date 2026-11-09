@@ -6,9 +6,10 @@ o contador é criado com cache.add (TTL definido uma única vez) e incrementado 
 cache.incr (sem reiniciar o TTL). O bloqueio armazena o timestamp de expiração para
 calcular retry_after real, independentemente do cache.ttl (inexistente no LocMemCache).
 
-TRUSTED_PROXY: quando True, o primeiro IP de X-Forwarded-For é usado como IP do cliente.
-AVISO: sem um proxy confiável na frente do servidor, confiar em X-Forwarded-For permite
-que qualquer cliente forje o IP e burle o rate limit por IP.
+TRUSTED_PROXY_COUNT: número de proxies reversos confiáveis na frente do servidor.
+0 = usa REMOTE_ADDR (padrão seguro); N = pega o N-ésimo IP da direita do X-Forwarded-For.
+AVISO: sem proxies configurados (N=0), confiar em X-Forwarded-For permite que qualquer
+cliente forje o IP e burle o rate limit.
 """
 
 import hashlib
@@ -29,20 +30,34 @@ _DUMMY_HASH = _bcrypt.hashpw(b'dummy-stockflow-timing', _bcrypt.gensalt(rounds=4
 
 def ip_do_cliente(request):
     """
-    Retorna o IP do cliente.
+    Retorna o IP do cliente a partir de REMOTE_ADDR ou X-Forwarded-For.
 
-    Usa REMOTE_ADDR por padrão. Quando TRUSTED_PROXY=true, usa o primeiro
-    endereço de X-Forwarded-For (definido pelo proxy reverso).
+    Controlado por TRUSTED_PROXY_COUNT (env, padrão 0):
+    - 0: usa REMOTE_ADDR; ignora X-Forwarded-For (qualquer cliente poderia forjá-lo).
+    - N > 0: pega o N-ésimo IP contando da direita no X-Forwarded-For,
+      assumindo que N proxies reversos confiáveis estão na frente do servidor.
 
-    AVISO: TRUSTED_PROXY=true só deve ser usado quando há um proxy reverso
-    confiável na frente do servidor. Sem isso, qualquer cliente pode forjar
-    X-Forwarded-For e burlar o rate limit por IP.
+    Exemplos:
+      1 proxy  → XFF "client"           → N=1 → ips[-1]="client" ✓
+      2 proxies → XFF "client, proxy1"  → N=2 → ips[-2]="client" ✓
+
+    Fallback: se XFF tiver menos entradas que N, usa ips[0] (mais antigo disponível).
     """
-    if os.environ.get('TRUSTED_PROXY', '').lower() == 'true':
-        forwarded = request.META.get('HTTP_X_FORWARDED_FOR', '')
-        if forwarded:
-            return forwarded.split(',')[0].strip()
-    return request.META.get('REMOTE_ADDR', 'unknown')
+    try:
+        count = int(os.environ.get('TRUSTED_PROXY_COUNT', '0'))
+    except ValueError:
+        count = 0
+
+    if count <= 0:
+        return request.META.get('REMOTE_ADDR', 'unknown')
+
+    forwarded = request.META.get('HTTP_X_FORWARDED_FOR', '')
+    if not forwarded:
+        return request.META.get('REMOTE_ADDR', 'unknown')
+
+    ips = [ip.strip() for ip in forwarded.split(',')]
+    idx = -count if len(ips) >= count else 0
+    return ips[idx] or request.META.get('REMOTE_ADDR', 'unknown')
 
 
 def _chave_bloq(chave):

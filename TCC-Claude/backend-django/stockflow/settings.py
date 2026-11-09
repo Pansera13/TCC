@@ -14,6 +14,9 @@ except ImportError:
 
 SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-dev-only-key-change-in-production')
 DEBUG = os.environ.get('DEBUG', 'false').lower() == 'true'
+# DJANGO_ENV=production força DEBUG=False mesmo que DEBUG=true esteja no .env.
+if os.environ.get('DJANGO_ENV') == 'production':
+    DEBUG = False
 _allowed_hosts_env = os.environ.get('ALLOWED_HOSTS', '')
 ALLOWED_HOSTS = (
     [h.strip() for h in _allowed_hosts_env.split(',') if h.strip()]
@@ -47,9 +50,13 @@ if not DEBUG:
     SECURE_HSTS_PRELOAD = False   # não ativar sem registro deliberado no preload-list
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
-    # TRUSTED_PROXY: ativar somente com proxy reverso confiável na frente do servidor.
-    # Sem proxy, X-Forwarded-Proto pode ser forjado por qualquer cliente.
-    if os.environ.get('TRUSTED_PROXY', '').lower() == 'true':
+    # TRUSTED_PROXY_COUNT > 0: ativar somente com proxy reverso confiável na frente do
+    # servidor. Sem proxy, X-Forwarded-Proto pode ser forjado por qualquer cliente.
+    try:
+        _trusted_proxy_count = int(os.environ.get('TRUSTED_PROXY_COUNT', '0'))
+    except ValueError:
+        _trusted_proxy_count = 0
+    if _trusted_proxy_count > 0:
         SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 INSTALLED_APPS = [
@@ -163,6 +170,13 @@ USE_TZ = True
 STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+# Avisos do manage.py check --deploy silenciados com justificativa:
+#   security.W003: CSRF middleware não instalado — correto; usamos JWT (stateless),
+#     não sessões. CSRF só é necessário com cookies de sessão.
+#   security.W021: SECURE_HSTS_PRELOAD=False — intencional; a preload list é permanente
+#     e deve ser ativada apenas após HTTPS estável e registro deliberado.
+SILENCED_SYSTEM_CHECKS = ['security.W003', 'security.W021']
+
 # ── Upload NF-e ───────────────────────────────────────────────────────────────
 NFE_MAX_SIZE_BYTES = int(os.environ.get('NFE_MAX_SIZE_BYTES', 2 * 1024 * 1024))
 NFE_MAX_ITENS = int(os.environ.get('NFE_MAX_ITENS', 500))
@@ -202,6 +216,16 @@ LOGGING = {
             'propagate': False,
         },
         'api.nfe': {
+            'handlers': ['console'],
+            'level': 'WARNING',
+            'propagate': False,
+        },
+        'api.eventos': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+        'api.email_seguranca': {
             'handlers': ['console'],
             'level': 'WARNING',
             'propagate': False,

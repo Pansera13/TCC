@@ -16,6 +16,7 @@ from api.limites import (
     chave_id, _DUMMY_HASH,
 )
 from api.senha import validar_senha
+import api.eventos as _ev
 
 
 def _jwt_secret():
@@ -151,6 +152,8 @@ def register(request):
         new_id = cur.fetchone()[0]
         cur.execute('UPDATE usuarios SET tenant_id = %s WHERE id = %s', [new_id, new_id])
 
+    _ev.registrar('cadastro', request, tenant_id=new_id, usuario_id=new_id,
+                  detalhes={'email_mascarado': _ev._mascarar_email(email)})
     return JsonResponse({'message': 'Conta criada com sucesso!'}, status=201)
 
 
@@ -177,6 +180,8 @@ def login(request):
     espera_ip = segundos_bloqueado(chave_ip)
     espera_id = segundos_bloqueado(chave_ident)
     if espera_ip > 0 or espera_id > 0:
+        _ev.registrar('login_bloqueado', request,
+                      detalhes={'email_mascarado': _ev._mascarar_email(identifier) if '@' in identifier else None})
         return _resp_429(max(espera_ip, espera_id))
 
     # Detectar tipo: e-mail, CPF (11 dígitos) ou CNPJ (14 dígitos)
@@ -202,11 +207,16 @@ def login(request):
         bcrypt.checkpw(senha.encode(), _DUMMY_HASH.encode())
         registrar_falha(chave_ip, jan_s, max_f, bloq_s, 'login-ip')
         registrar_falha(chave_ident, jan_s, max_f, bloq_s, 'login-id')
+        _ev.registrar('login_falho', request,
+                      detalhes={'motivo': 'usuario_nao_encontrado'})
         return JsonResponse({'message': 'Usuário ou senha inválidos.'}, status=401)
 
     if not bcrypt.checkpw(senha.encode(), user.senha_hash.encode()):
         registrar_falha(chave_ip, jan_s, max_f, bloq_s, 'login-ip')
         registrar_falha(chave_ident, jan_s, max_f, bloq_s, 'login-id')
+        _ev.registrar('login_falho', request, usuario_id=user.id, tenant_id=user.tenant_id,
+                      detalhes={'motivo': 'senha_errada',
+                                'email_mascarado': _ev._mascarar_email(user.email)})
         return JsonResponse({'message': 'Usuário ou senha inválidos.'}, status=401)
 
     # Conta desativada: retorna 403, NÃO conta como falha de brute force

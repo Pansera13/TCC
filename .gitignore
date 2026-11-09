@@ -12,6 +12,21 @@
 .env.*
 !.env.example
 
+# Chaves, certificados e dumps/backups do banco (contêm segredos ou dados de clientes)
+*.pem
+*.key
+*.p12
+*.pfx
+*.dump
+*.backup
+*.bak
+stockflow_backup_*
+*.sqlite3
+
+# Cobertura de testes gerada localmente
+.coverage
+htmlcov/
+
 # Dependências e builds
 node_modules/
 dist/

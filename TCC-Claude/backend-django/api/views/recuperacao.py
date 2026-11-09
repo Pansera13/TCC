@@ -12,6 +12,8 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from api.models import Usuario
 from api.limites import ip_do_cliente, segundos_bloqueado, registrar_falha
+import api.eventos as _ev
+from api.email_seguranca import aviso_senha_alterada
 
 VALIDADE_CODIGO_S = 15 * 60
 INTERVALO_REENVIO_S = 60
@@ -189,6 +191,8 @@ def enviar_codigo(request):
     espera_ip = segundos_bloqueado(chave_ip_rec)
     if espera_conta > 0 or espera_ip > 0:
         espera = max(espera_conta, espera_ip)
+        _ev.registrar('login_bloqueado', request, usuario_id=conta.id, tenant_id=conta.tenant_id,
+                      detalhes={'contexto': 'recuperacao', 'email_mascarado': _ev._mascarar_email(conta.email_recuperacao)})
         resp = JsonResponse({'message': 'Muitos códigos solicitados. Tente novamente mais tarde.', 'retry_after': espera}, status=429)
         resp['Retry-After'] = str(espera)
         return resp
@@ -215,6 +219,8 @@ def enviar_codigo(request):
 
     registrar_falha(chave_conta, HORA_S, 3, HORA_S, 'recuperacao-conta')
     registrar_falha(chave_ip_rec, HORA_S, 10, HORA_S, 'recuperacao-ip')
+    _ev.registrar('recuperacao_solicitada', request, usuario_id=conta.id, tenant_id=conta.tenant_id,
+                  detalhes={'email_mascarado': _ev._mascarar_email(conta.email_recuperacao)})
     return JsonResponse({'message': 'Código enviado.', 'reenvio_em': INTERVALO_REENVIO_S})
 
 
@@ -258,6 +264,10 @@ def verificar_codigo(request):
             conta.reset_code_expires_at = None
             conta.reset_code_tentativas = 0
             conta.save()
+            _ev.registrar('codigo_bloqueado', request, usuario_id=conta.id, tenant_id=conta.tenant_id)
+        else:
+            _ev.registrar('codigo_errado', request, usuario_id=conta.id, tenant_id=conta.tenant_id,
+                          detalhes={'tentativas_restantes': restantes})
         return JsonResponse({'message': 'Código inválido ou expirado.', 'tentativas_restantes': restantes}, status=400)
 
     reset_token = _assinar({
@@ -307,4 +317,10 @@ def redefinir_senha(request):
     conta.reset_code_expires_at = None
     conta.reset_code_tentativas = 0
     conta.save()
+
+    _ev.registrar('recuperacao_concluida', request, usuario_id=conta.id, tenant_id=conta.tenant_id,
+                  detalhes={'email_mascarado': _ev._mascarar_email(conta.email)})
+    if conta.email_recuperacao:
+        aviso_senha_alterada(conta.email_recuperacao)
+
     return JsonResponse({'message': 'Senha alterada com sucesso!'})
