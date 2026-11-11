@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import api, { deleteProduct, archiveProduct } from '../services/api';
+import api, { deleteProduct } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
 const UNIDADES = ['UN', 'KG', 'L', 'CX'];
@@ -31,7 +31,7 @@ export default function EditProductModal({ product, onClose, onSaved, categories
   });
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
-  // 'arquivar-1' | 'arquivar-2' | 'excluir-1' | 'excluir-2' | null
+  // 'excluir-1' | 'excluir-2' | null
   const [confirmacao, setConfirmacao] = useState(null);
   const [agindo, setAgindo] = useState(false);
 
@@ -73,20 +73,6 @@ export default function EditProductModal({ product, onClose, onSaved, categories
     }
   }
 
-  async function handleArquivar() {
-    setAgindo(true);
-    try {
-      await archiveProduct(product.id);
-      onSaved();
-      onClose();
-    } catch (err) {
-      setErrors({ _global: err.response?.data?.message || 'Erro ao arquivar o produto.' });
-      setConfirmacao(null);
-    } finally {
-      setAgindo(false);
-    }
-  }
-
   async function handleExcluir() {
     setAgindo(true);
     try {
@@ -101,7 +87,6 @@ export default function EditProductModal({ product, onClose, onSaved, categories
     }
   }
 
-  const podeArquivar = can('produto:arquivar');
   const podeExcluir = can('produto:excluir');
 
   return (
@@ -198,53 +183,9 @@ export default function EditProductModal({ product, onClose, onSaved, categories
             </button>
           </div>
 
-          {(podeArquivar || podeExcluir) && (
+          {podeExcluir && (
             <div className="border-t border-gray-100 dark:border-gray-800 pt-3 flex flex-col gap-2">
-              {/* Arquivar produto */}
-              {podeArquivar && confirmacao !== 'excluir-1' && confirmacao !== 'excluir-2' && (
-                confirmacao === 'arquivar-2' ? (
-                  <div className="flex flex-col gap-2 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-3 py-3">
-                    <p className="text-xs text-amber-700 dark:text-amber-300">
-                      Arquivar <strong>{product.nome}</strong>? O produto sairá do estoque ativo mas o histórico será preservado.
-                    </p>
-                    <div className="flex gap-2">
-                      <button type="button" onClick={() => setConfirmacao(null)} disabled={agindo}
-                        className="flex-1 px-3 py-1.5 text-xs rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-white dark:hover:bg-gray-800 transition disabled:opacity-50">
-                        Cancelar
-                      </button>
-                      <button type="button" onClick={handleArquivar} disabled={agindo}
-                        className="flex-1 px-3 py-1.5 text-xs rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-medium transition disabled:opacity-50">
-                        {agindo ? 'Arquivando…' : 'Confirmar arquivamento'}
-                      </button>
-                    </div>
-                  </div>
-                ) : confirmacao === 'arquivar-1' ? (
-                  <div className="flex flex-col gap-2 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-3 py-3">
-                    <p className="text-xs text-amber-700 dark:text-amber-300">
-                      Tem certeza que deseja arquivar <strong>{product.nome}</strong>?
-                    </p>
-                    <div className="flex gap-2">
-                      <button type="button" onClick={() => setConfirmacao(null)}
-                        className="flex-1 px-3 py-1.5 text-xs rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-white dark:hover:bg-gray-800 transition">
-                        Não
-                      </button>
-                      <button type="button" onClick={() => setConfirmacao('arquivar-2')}
-                        className="flex-1 px-3 py-1.5 text-xs rounded-lg bg-amber-500 hover:bg-amber-600 text-white font-medium transition">
-                        Sim, continuar
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <button type="button" onClick={() => setConfirmacao('arquivar-1')}
-                    className="text-xs text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 hover:underline text-left">
-                    Arquivar produto
-                  </button>
-                )
-              )}
-
-              {/* Excluir definitivamente */}
-              {podeExcluir && confirmacao !== 'arquivar-1' && confirmacao !== 'arquivar-2' && (
-                confirmacao === 'excluir-2' ? (
+              {confirmacao === 'excluir-2' ? (
                   <div className="flex flex-col gap-2 rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 px-3 py-3">
                     <p className="text-xs text-red-600 dark:text-red-300">
                       Excluir <strong>{product.nome}</strong> permanentemente? Esta ação não pode ser desfeita.
@@ -282,7 +223,7 @@ export default function EditProductModal({ product, onClose, onSaved, categories
                     Excluir definitivamente
                   </button>
                 )
-              )}
+              }
             </div>
           )}
         </form>

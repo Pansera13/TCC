@@ -1,0 +1,17 @@
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: /TCC-Claude/backend-django
+    schedule:
+      interval: weekly
+    labels:
+      - dependencies
+      - python
+
+  - package-ecosystem: npm
+    directory: /TCC-Claude/frontend
+    schedule:
+      interval: weekly
+    labels:
+      - dependencies
+      - javascript

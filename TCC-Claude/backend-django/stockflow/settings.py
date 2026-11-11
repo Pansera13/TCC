@@ -62,7 +62,6 @@ if not DEBUG:
 INSTALLED_APPS = [
     'django.contrib.contenttypes',
     'django.contrib.staticfiles',
-    'rest_framework',
     'api',
 ]
 
@@ -126,14 +125,6 @@ else:
         }
     }
 
-# ── DRF — sem autenticação global (feita pelo nosso middleware) ───────────────
-REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': [],
-    'DEFAULT_PERMISSION_CLASSES': [],
-    'DEFAULT_RENDERER_CLASSES': ['rest_framework.renderers.JSONRenderer'],
-    'UNAUTHENTICATED_USER': None,
-}
-
 # ── CORS ──────────────────────────────────────────────────────────────────────
 # Padrão: localhost + redes RFC 1918 (igual ao backend Node)
 _RFC1918 = r'^https?://(localhost|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)(:\d+)?$'
@@ -153,8 +144,6 @@ GLOBAL_RATE_LIMIT_MAX = int(os.environ.get('GLOBAL_RATE_LIMIT_MAX', 1000))
 GLOBAL_RATE_LIMIT_JANELA_SEGUNDOS = int(os.environ.get('GLOBAL_RATE_LIMIT_JANELA_SEGUNDOS', 60))
 GLOBAL_RATE_LIMIT_BLOQUEIO_SEGUNDOS = int(os.environ.get('GLOBAL_RATE_LIMIT_BLOQUEIO_SEGUNDOS', 60))
 
-# ── Rate limit (django-ratelimit — mantido como fallback, não usado diretamente) ──
-RATELIMIT_USE_CACHE = 'default'
 CACHES = {
     'default': {
         'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',

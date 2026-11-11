@@ -1,0 +1,7 @@
+django
+psycopg2-binary
+PyJWT
+bcrypt
+requests
+defusedxml
+python-dotenv

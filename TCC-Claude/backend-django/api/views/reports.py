@@ -52,7 +52,7 @@ def get_report(request):
 
     with connection.cursor() as cur:
         cur.execute(
-            f"""SELECT COUNT(*)::int AS total,
+            """SELECT COUNT(*)::int AS total,
                        COUNT(*) FILTER (WHERE quantidade > 0 AND quantidade <= %s)::int AS baixo,
                        COUNT(*) FILTER (WHERE quantidade = 0)::int AS esgotados
                 FROM products WHERE tenant_id = %s AND arquivado = false""",
@@ -61,43 +61,49 @@ def get_report(request):
         estoque = cur.fetchone()
 
         cur.execute(
-            f"""SELECT COALESCE(SUM(m.quantidade) FILTER (WHERE m.tipo = 'entrada'), 0) AS entradas,
-                       COALESCE(SUM(m.quantidade) FILTER (WHERE m.tipo = 'saida'), 0) AS saidas
-                FROM movements m WHERE m.tipo IN ('entrada','saida') AND m.tenant_id = %s AND {periodo}
-                  AND {nao_arquivado}""",
+            "SELECT COALESCE(SUM(m.quantidade) FILTER (WHERE m.tipo = 'entrada'), 0) AS entradas,"  # nosec B608 — periodo e nao_arquivado são constantes locais sem dados do usuário
+            " COALESCE(SUM(m.quantidade) FILTER (WHERE m.tipo = 'saida'), 0) AS saidas"
+            " FROM movements m WHERE m.tipo IN ('entrada','saida') AND m.tenant_id = %s AND "
+            + periodo
+            + " AND " + nao_arquivado,
             [tenant_id, frm, to],
         )
         totais = cur.fetchone()
 
         cur.execute(
-            f"""SELECT m.product_id, MAX(m.product_nome) AS nome, SUM(m.quantidade)::float AS quantidade
-                FROM movements m WHERE m.tipo = 'saida' AND m.tenant_id = %s AND {periodo}
-                  AND {nao_arquivado}
-                GROUP BY m.product_id ORDER BY SUM(m.quantidade) DESC, MAX(m.product_nome) LIMIT 10""",
+            "SELECT m.product_id, MAX(m.product_nome) AS nome, SUM(m.quantidade)::float AS quantidade"  # nosec B608 — periodo e nao_arquivado são constantes locais sem dados do usuário
+            " FROM movements m WHERE m.tipo = 'saida' AND m.tenant_id = %s AND "
+            + periodo
+            + " AND " + nao_arquivado
+            + " GROUP BY m.product_id ORDER BY SUM(m.quantidade) DESC, MAX(m.product_nome) LIMIT 10",
             [tenant_id, frm, to],
         )
         top = cur.fetchall()
 
         cur.execute(
-            f"""SELECT p.id AS product_id, p.nome, p.categoria, p.unidade, p.quantidade::float AS estoque,
-                       COALESCE(s.retirado, 0)::float AS retirado
-                FROM products p
-                LEFT JOIN (
-                  SELECT m.product_id, SUM(m.quantidade) AS retirado
-                  FROM movements m WHERE m.tipo = 'saida' AND m.tenant_id = %s AND {periodo} GROUP BY m.product_id
-                ) s ON s.product_id = p.id
-                WHERE p.tenant_id = %s AND p.arquivado = false
-                ORDER BY COALESCE(s.retirado, 0) DESC, p.nome""",
+            "SELECT p.id AS product_id, p.nome, p.categoria, p.unidade, p.quantidade::float AS estoque,"  # nosec B608 — periodo é constante local sem dados do usuário
+            " COALESCE(s.retirado, 0)::float AS retirado"
+            " FROM products p"
+            " LEFT JOIN ("
+            "   SELECT m.product_id, SUM(m.quantidade) AS retirado"
+            "   FROM movements m WHERE m.tipo = 'saida' AND m.tenant_id = %s AND "
+            + periodo
+            + " GROUP BY m.product_id"
+            " ) s ON s.product_id = p.id"
+            " WHERE p.tenant_id = %s AND p.arquivado = false"
+            " ORDER BY COALESCE(s.retirado, 0) DESC, p.nome",
             [tenant_id, frm, to, tenant_id],
         )
         giro_rows = cur.fetchall()
 
         cur.execute(
-            f"""SELECT COALESCE(NULLIF(TRIM(p.categoria), ''), 'Sem Categoria') AS categoria,
-                       SUM(m.quantidade)::float AS quantidade
-                FROM movements m JOIN products p ON p.id = m.product_id
-                WHERE m.tipo = 'saida' AND m.tenant_id = %s AND {periodo} AND p.arquivado = false
-                GROUP BY 1 ORDER BY SUM(m.quantidade) DESC, 1""",
+            "SELECT COALESCE(NULLIF(TRIM(p.categoria), ''), 'Sem Categoria') AS categoria,"  # nosec B608 — periodo é constante local sem dados do usuário
+            " SUM(m.quantidade)::float AS quantidade"
+            " FROM movements m JOIN products p ON p.id = m.product_id"
+            " WHERE m.tipo = 'saida' AND m.tenant_id = %s AND "
+            + periodo
+            + " AND p.arquivado = false"
+            " GROUP BY 1 ORDER BY SUM(m.quantidade) DESC, 1",
             [tenant_id, frm, to],
         )
         consumo = cur.fetchall()

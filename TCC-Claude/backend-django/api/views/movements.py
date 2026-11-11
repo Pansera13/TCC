@@ -83,17 +83,17 @@ def list_movements(request):
     direcao = 'ASC' if request.GET.get('orderDir') == 'asc' else 'DESC'
 
     with connection.cursor() as cur:
-        cur.execute(f'SELECT COUNT(*)::int AS total FROM movements {filtro}', params)
+        cur.execute(f'SELECT COUNT(*)::int AS total FROM movements {filtro}', params)  # nosec B608 — filtro contém apenas %s; valores do usuário vão por params
         total = cur.fetchone()[0]
 
         offset_val = (page - 1) * limit
         cur.execute(
-            f"""SELECT id, product_id, product_nome, tipo, quantidade, user_id, user_nome,
-                       origem, pedido_id, detalhes, created_at
-                FROM movements {filtro}
-                ORDER BY {coluna} {direcao}, id DESC
-                LIMIT {add(limit)} OFFSET {add(offset_val)}""",
-            params,
+            "SELECT id, product_id, product_nome, tipo, quantidade, user_id, user_nome,"
+            " origem, pedido_id, detalhes, created_at"
+            f" FROM movements {filtro}"  # nosec B608 — filtro contém apenas %s; valores do usuário vão por params
+            f" ORDER BY {coluna} {direcao}, id DESC"  # nosec B608 — coluna ∈ COLUNAS_ORDEM, direcao ∈ {ASC,DESC}
+            " LIMIT %s OFFSET %s",
+            params + [limit, offset_val],
         )
         cols = [d[0] for d in cur.description]
         items = []

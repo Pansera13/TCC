@@ -9,12 +9,12 @@ import Pagination from '../components/Pagination';
 import RecarregarProdutos from '../components/RecarregarProdutos';
 import MovementsHistory from '../components/MovementsHistory';
 import Reports from '../components/Reports';
-import { groupProductsByCategory, paginate, TABLE_PAGE_SIZE } from '../utils/products';
+import { groupProductsByCategory, paginate, TABLE_PAGE_SIZE, estaSemEstoque } from '../utils/products';
 import { useFitRows } from '../utils/useFitRows';
 import SortTh from '../components/SortTh';
 import { sortRows, proximaOrdem } from '../utils/sort';
 import { zebra, TABLE_WRAP } from '../utils/tables';
-import api, { isRateLimited, listArchivedProducts, restoreProduct, deleteProduct } from '../services/api';
+import api, { isRateLimited } from '../services/api';
 import { supabase } from '../supabaseClient';
 
 const ALL_NAV_ITEMS = [
@@ -22,7 +22,7 @@ const ALL_NAV_ITEMS = [
   { id: 'produtos',      label: 'Produtos',         icon: '📦' },
   { id: 'movimentacoes', label: 'Movimentações',    icon: '🔄' },
   { id: 'relatorios',     label: 'Relatórios',       icon: '📊', permissao: 'relatorio:ver' },
-  { id: 'arquivados',    label: 'Arquivados',       icon: '🗄', permissao: 'produto:ver-arquivados' },
+  { id: 'sem-estoque',   label: 'Sem estoque',      icon: '❌' },
 ];
 
 const LOW_STOCK_THRESHOLD = 3;
@@ -73,11 +73,6 @@ export default function Dashboard({ darkMode, setDarkMode }) {
   const [showLayoutMenu, setShowLayoutMenu] = useState(false);
   const layoutMenuRef = useRef(null);
 
-  // Arquivados (Admin)
-  const [produtosArquivados, setProdutosArquivados] = useState([]);
-  const [loadingArquivados, setLoadingArquivados] = useState(false);
-  const arquivadosLoadedRef = useRef(false);
-
   // Realtime + polling refs
   const realtimeStatusRef = useRef('UNKNOWN');
   const pollIntervalRef = useRef(null);
@@ -96,7 +91,7 @@ export default function Dashboard({ darkMode, setDarkMode }) {
     { label: 'Total de Produtos',  value: products.length || '—', icon: '📦', color: 'from-purple-500 to-purple-700' },
     { label: 'Em Estoque',         value: products.filter(p => p.quantidade > 0).length || '—', icon: '✅', color: 'from-green-500 to-green-700' },
     { label: 'Estoque Baixo',      value: products.filter(p => p.quantidade > 0 && p.quantidade <= LOW_STOCK_THRESHOLD).length || '—', icon: '⚠️', color: 'from-yellow-500 to-yellow-600' },
-    { label: 'Sem Estoque',        value: products.filter(p => p.quantidade === 0).length || '—', icon: '❌', color: 'from-red-500 to-red-700' },
+    { label: 'Sem Estoque',        value: products.filter(estaSemEstoque).length || '—', icon: '❌', color: 'from-red-500 to-red-700' },
   ];
 
   // A tela "Carregando…" só aparece na primeira leitura; as seguintes (polling, salvar, etc.) atualizam em silêncio
@@ -142,24 +137,6 @@ export default function Dashboard({ darkMode, setDarkMode }) {
       setErroRecarga(true);
       erroRecargaTimerRef.current = setTimeout(() => setErroRecarga(false), 4000);
     }
-  }
-
-  async function fetchArquivados() {
-    if (arquivadosLoadedRef.current) return; // cache válido, pula
-    setLoadingArquivados(true);
-    try {
-      const { data } = await listArchivedProducts();
-      setProdutosArquivados(data);
-      arquivadosLoadedRef.current = true;
-    } catch {
-      // silently fail
-    } finally {
-      setLoadingArquivados(false);
-    }
-  }
-
-  function invalidarArquivados() {
-    arquivadosLoadedRef.current = false;
   }
 
   useEffect(() => { fetchProducts(); }, []);
@@ -222,11 +199,6 @@ export default function Dashboard({ darkMode, setDarkMode }) {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    if (activeNav === 'arquivados' && can('produto:ver-arquivados')) fetchArquivados();
-  }, [activeNav]);
-
 
   // Close profile menu when clicking outside
   useEffect(() => {
@@ -294,7 +266,8 @@ export default function Dashboard({ darkMode, setDarkMode }) {
   // ─── Renderers ──────────────────────────────────────────────────
 
   function renderInicio() {
-    const pagInicio = paginate(sortRows(products, ordem.inicio), pagTabelas.inicio, linhasPorPagina);
+    const comEstoque = products.filter(p => !estaSemEstoque(p));
+    const pagInicio = paginate(sortRows(comEstoque, ordem.inicio), pagTabelas.inicio, linhasPorPagina);
     return (
       <>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -346,6 +319,11 @@ export default function Dashboard({ darkMode, setDarkMode }) {
               <span className="text-3xl mb-2">📦</span>
               <p className="text-sm">Nenhum produto cadastrado ainda.</p>
             </div>
+          ) : comEstoque.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-gray-400 dark:text-gray-600">
+              <span className="text-3xl mb-2">❌</span>
+              <p className="text-sm">Todos os produtos estão sem estoque.</p>
+            </div>
           ) : (
             <>
             <div ref={areaTabelaRef} className="overflow-x-auto overflow-y-hidden flex-1 min-h-0">
@@ -388,7 +366,7 @@ export default function Dashboard({ darkMode, setDarkMode }) {
 
   function renderSemEstoque() {
     const esgotados = products
-      .filter(p => parseFloat(p.quantidade) === 0)
+      .filter(estaSemEstoque)
       .sort((a, b) => (a.categoria || 'Sem Categoria').localeCompare(b.categoria || 'Sem Categoria'));
     const pagEsgotados = paginate(sortRows(esgotados, ordem.esgotados), pagTabelas.esgotados, linhasPorPagina);
 
@@ -397,7 +375,7 @@ export default function Dashboard({ darkMode, setDarkMode }) {
         <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span>❌</span>
-            <h2 className="font-semibold text-gray-800 dark:text-white text-sm">Produtos Esgotados</h2>
+            <h2 className="font-semibold text-gray-800 dark:text-white text-sm">Sem estoque</h2>
             <span className="ml-1 text-xs text-gray-400 dark:text-gray-500">({esgotados.length})</span>
           </div>
           <div className="flex items-center gap-3">
@@ -411,7 +389,7 @@ export default function Dashboard({ darkMode, setDarkMode }) {
         {esgotados.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-gray-400 dark:text-gray-600">
             <span className="text-4xl mb-3">✅</span>
-            <p className="text-sm">Nenhum produto esgotado no momento.</p>
+            <p className="text-sm">Nenhum produto sem estoque no momento.</p>
           </div>
         ) : (
           <>
@@ -425,6 +403,7 @@ export default function Dashboard({ darkMode, setDarkMode }) {
                   <SortTh k="fornecedor" ordem={ordem.esgotados} onSort={k => alternarOrdem('esgotados', k)} className="px-4 py-3 font-medium whitespace-nowrap hide-lt-1100">Fornecedor</SortTh>
                   <SortTh k="peso_kg" ordem={ordem.esgotados} onSort={k => alternarOrdem('esgotados', k)} className="px-4 py-3 font-medium whitespace-nowrap hide-lt-1350">Peso (kg)</SortTh>
                   <SortTh k="created_at" ordem={ordem.esgotados} onSort={k => alternarOrdem('esgotados', k)} className="px-4 py-3 font-medium whitespace-nowrap hide-lt-1350">Cadastro</SortTh>
+                  <th className="px-4 py-3 font-medium text-xs text-gray-400 dark:text-gray-500">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
@@ -436,6 +415,20 @@ export default function Dashboard({ darkMode, setDarkMode }) {
                     <td className="px-4 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-500 hide-lt-1100">{p.fornecedor || '—'}</td>
                     <td className="px-4 py-1.5 whitespace-nowrap text-gray-600 dark:text-gray-400 hide-lt-1350">{fmtPeso(p)}</td>
                     <td className="px-4 py-1.5 whitespace-nowrap text-gray-500 dark:text-gray-500 hide-lt-1350">{fmtData(p.created_at)}</td>
+                    <td className="px-4 py-1.5 whitespace-nowrap">
+                      <div className="flex gap-2">
+                        <button onClick={() => setEntradaItem(p)}
+                          className="px-3 py-1.5 text-xs rounded-lg border border-green-200 dark:border-green-800 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 transition">
+                          Entrada
+                        </button>
+                        {can('produto:editar') && (
+                          <button onClick={() => setEditProduct(p)}
+                            className="px-3 py-1.5 text-xs rounded-lg border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition">
+                            Editar
+                          </button>
+                        )}
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -449,15 +442,16 @@ export default function Dashboard({ darkMode, setDarkMode }) {
   }
 
   function renderProdutos() {
-    const { grouped, categorias: todasCategorias } = groupProductsByCategory(products, search);
+    const produtosComEstoque = products.filter(p => !estaSemEstoque(p));
+    const { grouped, categorias: todasCategorias } = groupProductsByCategory(produtosComEstoque, search);
     // Filtro de categoria selecionado na toolbar
     const categorias = categoriaFiltro ? todasCategorias.filter(c => c === categoriaFiltro) : todasCategorias;
     // Ordenação por coluna dentro de cada categoria
     if (ordem.produtos) for (const cat of categorias) grouped[cat] = sortRows(grouped[cat], ordem.produtos);
     const filtered = categorias.flatMap(cat => grouped[cat]);
 
-    // Lista completa de categorias para o select (sem filtro de busca para não sumir opções)
-    const todasCategoriasSelect = [...new Set(products.map(p => p.categoria || 'Sem Categoria'))].sort();
+    // Categorias para o select: só as que têm produtos com estoque, para não oferecer categoria vazia
+    const todasCategoriasSelect = [...new Set(produtosComEstoque.map(p => p.categoria || 'Sem Categoria'))].sort();
 
     // Buscar limpa filtro de categoria e volta todas as páginas para 1
     const buscar = (valor) => { setSearch(valor); setCategoriaFiltro(''); setPagePorCategoria({}); };
@@ -852,8 +846,14 @@ export default function Dashboard({ darkMode, setDarkMode }) {
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-gray-400 dark:text-gray-600">
             <span className="text-4xl mb-3">📦</span>
-            <p className="text-sm">{search ? `Nenhum produto encontrado para "${search}".` : 'Nenhum produto cadastrado ainda.'}</p>
-            {!search && (
+            <p className="text-sm">{
+              search
+                ? `Nenhum produto encontrado para "${search}".`
+                : products.length > 0
+                  ? 'Todos os produtos estão sem estoque. Veja a aba Sem estoque.'
+                  : 'Nenhum produto cadastrado ainda.'
+            }</p>
+            {!search && products.length === 0 && (
               <button onClick={() => setShowModal(true)} className="mt-4 px-4 py-2 text-xs bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition font-medium">
                 + Adicionar primeiro produto
               </button>
@@ -861,92 +861,6 @@ export default function Dashboard({ darkMode, setDarkMode }) {
           </div>
         ) : (
           <div className="flex flex-col gap-4">{conteudo}</div>
-        )}
-      </div>
-    );
-  }
-
-  function renderArquivados() {
-    async function handleRestaurar(p) {
-      try {
-        await restoreProduct(p.id);
-        setProdutosArquivados(prev => prev.filter(x => x.id !== p.id));
-        invalidarArquivados();
-        fetchProducts();
-      } catch (err) {
-        alert(err.response?.data?.message || 'Erro ao restaurar produto.');
-      }
-    }
-
-    async function handleExcluirArquivado(p) {
-      if (!window.confirm(`Excluir "${p.nome}" definitivamente? Esta ação não pode ser desfeita.`)) return;
-      try {
-        await deleteProduct(p.id);
-        setProdutosArquivados(prev => prev.filter(x => x.id !== p.id));
-        invalidarArquivados();
-      } catch (err) {
-        alert(err.response?.data?.message || 'Erro ao excluir produto.');
-      }
-    }
-
-    return (
-      <div className={`bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 flex-1 min-h-0 flex flex-col ${TABLE_WRAP}`}>
-        <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span>🗄</span>
-            <h2 className="font-semibold text-gray-800 dark:text-white text-sm">Produtos Arquivados</h2>
-            {!loadingArquivados && <span className="text-xs text-gray-400 dark:text-gray-500">({produtosArquivados.length})</span>}
-          </div>
-          <button onClick={() => { invalidarArquivados(); fetchArquivados(); }} className="text-xs text-purple-600 dark:text-purple-400 hover:underline">Atualizar</button>
-        </div>
-        {loadingArquivados ? (
-          <div className="flex flex-col items-center justify-center py-20 text-gray-400 dark:text-gray-600">
-            <span className="text-4xl mb-3 animate-pulse">🗄</span>
-            <p className="text-sm">Carregando…</p>
-          </div>
-        ) : produtosArquivados.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-gray-400 dark:text-gray-600">
-            <span className="text-4xl mb-3">🗄</span>
-            <p className="text-sm">Nenhum produto arquivado.</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto flex-1">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-xs text-gray-400 dark:text-gray-500 border-b border-gray-100 dark:border-gray-800">
-                  <th className="px-4 py-3 font-medium">Nome</th>
-                  <th className="px-4 py-3 font-medium whitespace-nowrap hide-lt-850">Categoria</th>
-                  <th className="px-4 py-3 font-medium whitespace-nowrap">Qtd.</th>
-                  <th className="px-4 py-3 font-medium whitespace-nowrap hide-lt-1100">Arquivado em</th>
-                  <th className="px-4 py-3 font-medium">Ações</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
-                {produtosArquivados.map((p, i) => (
-                  <tr key={p.id} className={i % 2 === 0 ? '' : 'bg-gray-50/60 dark:bg-gray-800/30'}>
-                    <td className="px-4 py-2 font-medium text-gray-800 dark:text-gray-200">{p.nome}</td>
-                    <td className="px-4 py-2 text-gray-500 dark:text-gray-400 hide-lt-850">{p.categoria || '—'}</td>
-                    <td className="px-4 py-2 text-gray-600 dark:text-gray-400">{parseFloat(p.quantidade)} {p.unidade}</td>
-                    <td className="px-4 py-2 text-gray-500 dark:text-gray-500 hide-lt-1100">
-                      {p.arquivado_em ? new Date(p.arquivado_em).toLocaleDateString('pt-BR') : '—'}
-                    </td>
-                    <td className="px-4 py-2">
-                      <div className="flex gap-2">
-                        <button onClick={() => handleRestaurar(p)}
-                          className="px-3 py-1.5 text-xs rounded-lg border border-green-200 dark:border-green-800 text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 transition">
-                          Restaurar
-                        </button>
-                        <button onClick={() => handleExcluirArquivado(p)}
-                          className="px-3 py-1.5 text-xs rounded-lg border border-red-200 dark:border-red-800 text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition">
-                          Excluir definitivamente
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
         )}
       </div>
     );
@@ -993,7 +907,6 @@ export default function Dashboard({ darkMode, setDarkMode }) {
             )}
             {activeNav === 'relatorios' && <Reports />}
             {activeNav === 'sem-estoque' && <div className={`${TABLE_WRAP} flex-1 min-h-0 flex flex-col`}>{renderSemEstoque()}</div>}
-            {activeNav === 'arquivados' && can('produto:ver-arquivados') && <div className={`${TABLE_WRAP} flex-1 min-h-0 flex flex-col`}>{renderArquivados()}</div>}
           </div>
         </main>
       </div>
@@ -1010,7 +923,7 @@ export default function Dashboard({ darkMode, setDarkMode }) {
         <EditProductModal
           product={editProduct}
           onClose={() => setEditProduct(null)}
-          onSaved={() => { invalidarArquivados(); fetchProducts(); }}
+          onSaved={() => { fetchProducts(); }}
           categories={[...new Set(products.map(p => p.categoria).filter(Boolean))].sort()}
         />
       )}

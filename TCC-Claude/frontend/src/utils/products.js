@@ -22,6 +22,8 @@ export function groupProductsByCategory(products, search = '') {
   return { grouped, categorias };
 }
 
+export function estaSemEstoque(p) { return parseFloat(p.quantidade) === 0; }
+
 // Recorta uma página; a página pedida é limitada ao intervalo válido [1, totalPages].
 export function paginate(items, page = 1, size = PRODUCTS_PAGE_SIZE) {
   const totalPages = Math.max(1, Math.ceil(items.length / size));
